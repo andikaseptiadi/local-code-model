@@ -1,0 +1,7 @@
+# Requirements for training Go code model from scratch
+torch>=2.0.0
+transformers>=4.20.0
+datasets>=2.0.0
+tokenizers>=0.13.0
+numpy>=1.21.0
+tqdm>=4.64.0
