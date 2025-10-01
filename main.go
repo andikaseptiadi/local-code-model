@@ -84,6 +84,10 @@ func main() {
 	// Parallel execution demo
 	fmt.Println()
 	DemoParallelExecution()
+
+	// Optimization progression demo
+	fmt.Println()
+	DemoOptimizationProgression()
 }
 
 // calculateParameters estimates the number of parameters in the model.
