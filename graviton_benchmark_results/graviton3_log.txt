@@ -1,0 +1,111 @@
+=== Starting Benchmark Suite ===
+
+Platform: AWS Graviton2 (Neoverse N1)
+Cores:    8
+Sizes:    [128 256]
+Iterations: 3
+
+=== Comprehensive Benchmark Suite ===
+Hardware: ARM64 (possibly Graviton, detected via GOARCH=arm64) on linux/arm64 (8 cores)
+Timestamp: 2025-10-01T03:52:50Z
+
+Benchmarking size 128x128
+  Naive... 0.22 GFLOPS (1.00x)
+  Parallel... 1.64 GFLOPS (7.40x)
+  CacheBlocked... 0.27 GFLOPS (1.20x)
+  CachedParallel... 0.26 GFLOPS (1.19x)
+
+Benchmarking size 256x256
+  Naive... 0.22 GFLOPS (1.00x)
+  Parallel... 1.75 GFLOPS (7.89x)
+  CacheBlocked... 0.25 GFLOPS (1.14x)
+  CachedParallel... 0.25 GFLOPS (1.14x)
+
+
+=== Benchmark Summary ===
+
+Hardware: ARM64 (possibly Graviton, detected via GOARCH=arm64)
+Baseline: 0.22 GFLOPS (naive single-threaded)
+
+Size 128x128:
+  Strategy                     Time       GFLOPS    Speedup
+  ------------------------------------------------------------
+  Naive                 18.935263ms         0.22      1.00x
+  Parallel               2.559228ms         1.64      7.40x
+  CacheBlocked          15.722063ms         0.27      1.20x
+  CachedParallel        15.846165ms         0.26      1.19x
+
+Size 256x256:
+  Strategy                     Time       GFLOPS    Speedup
+  ------------------------------------------------------------
+  Naive                151.367693ms         0.22      1.00x
+  Parallel              19.181678ms         1.75      7.89x
+  CacheBlocked         132.373918ms         0.25      1.14x
+  CachedParallel       132.406438ms         0.25      1.14x
+
+=== Key Insights ===
+
+Best speedup: 7.89x (Parallel, size=256)
+Parallel efficiency at size 128: 92.5% (7.40x / 8 cores)
+Parallel efficiency at size 256: 98.6% (7.89x / 8 cores)
+
+Saved results to /tmp/g3-results.json
+
+=== Performance Progression (ASCII) ===
+
+Matrix Size: 256x256
+Scale: 1.7 GFLOPS = 60 chars
+
+Naive           │████████ 0.22 GFLOPS (1.00x)
+Parallel        │████████████████████████████████████████████████████████████ 1.75 GFLOPS (7.89x)
+CacheBlocked    │█████████ 0.25 GFLOPS (1.14x)
+CachedParallel  │█████████ 0.25 GFLOPS (1.14x)
+
+=== Speedup vs Baseline ===
+
+Target (ideal parallel): 8x with 8 cores
+
+Naive           │████████ 1.00x
+Parallel        │████████████████████████████████████████████████████████████ 7.89x
+CacheBlocked    │█████████ 1.14x
+CachedParallel  │█████████ 1.14x
+
+
+=== Cross-Architecture Comparison ===
+
+To compare performance across different ARM platforms:
+
+1. Run benchmarks on each platform:
+
+   # On M4 Max (macOS)
+   go run . benchmark -json=m4_max.json
+
+   # On Graviton2 (AWS c6g)
+   go run . benchmark -json=graviton2.json
+
+   # On Graviton3 (AWS c7g)
+   go run . benchmark -json=graviton3.json
+
+   # On Graviton3E (AWS c7gn with enhanced networking)
+   go run . benchmark -json=graviton3e.json
+
+   # On Graviton4 (AWS c8g)
+   go run . benchmark -json=graviton4.json
+
+   # On g5g (Graviton2 + NVIDIA T4G)
+   go run . benchmark -json=g5g.json -gpu
+
+2. Collect all JSON files to one machine
+
+3. Generate comparison visualizations:
+   go run . compare -files="*.json" -format=gnuplot
+
+This will reveal:
+  • How cache sizes affect cache-blocking gains
+  • How memory bandwidth affects parallel scaling
+  • How SVE vs NEON affects vectorization
+  • Where each architecture excels
+
+Current benchmark saved to: /tmp/g3-results.json
+Platform: AWS Graviton2 (Neoverse N1)
+

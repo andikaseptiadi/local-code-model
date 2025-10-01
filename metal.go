@@ -130,12 +130,20 @@ package main
 // ===========================================================================
 
 /*
-#cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Metal -framework MetalPerformanceShaders -framework Foundation
+#cgo CFLAGS: -x objective-c -fobjc-arc
+#cgo LDFLAGS: -framework Metal -framework MetalPerformanceShaders -framework MetalPerformanceShadersGraph -framework Foundation
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
+#import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 #import <Foundation/Foundation.h>
+
+// Forward declarations for ANE functions (implemented in ane_mpsgraph.m)
+typedef void* ANEExecutorHandle;
+ANEExecutorHandle ane_create_executor(int m, int n, int k);
+void ane_destroy_executor(ANEExecutorHandle handle);
+int ane_execute_matmul(ANEExecutorHandle handle, const float* a, const float* b, float* c);
+const char* ane_get_info();
 
 // ===========================================================================
 // METAL CONTEXT MANAGEMENT
@@ -575,50 +583,41 @@ func (m *MetalBackend) DeviceName() string {
 // See ANE_RESEARCH.md for full details.
 // ===========================================================================
 
-// ANEBackend implements tensor operations using Apple Neural Engine.
+// ANEBackend implements tensor operations using Apple Neural Engine via MPSGraph.
 //
-// NOTE: This is currently a stub. Full ANE support would require Core ML
-// integration (see comments above for what's involved).
+// MPSGraph (Metal Performance Shaders Graph) is Apple's graph-based framework
+// that can target CPU, GPU, or ANE. Apple's runtime decides which accelerator
+// to use based on operation type, data size, and system conditions.
 type ANEBackend struct {
 	available bool
-	reason    string
+	executor  unsafe.Pointer // C.ANEExecutorHandle
+	m, n, k   int           // Fixed dimensions for this executor
 }
 
-// NewANEBackend creates an ANE compute backend.
+// NewANEBackend creates an ANE compute backend via MPSGraph.
 //
-// Currently returns an error explaining ANE requirements. The C function
-// ane_is_available() always returns false as ANE requires Core ML integration.
+// Default size is 512×512 - for other sizes, use NewANEBackendWithSize().
 func NewANEBackend() (*ANEBackend, error) {
-	available := bool(C.ane_is_available())
+	return NewANEBackendWithSize(512, 512, 512)
+}
 
-	reason := `ANE (Apple Neural Engine) requires Core ML integration.
-
-What would be needed:
-  1. Convert transformer to Core ML format
-  2. Create Objective-C wrapper for Core ML inference
-  3. Handle FP16/INT8 quantization
-  4. Deal with ANE constraints (fixed shapes, limited ops)
-  5. Implement tensor ↔ MLMultiArray conversion
-
-Estimated effort: 1-2 weeks
-Expected speedup: 10-50x over Metal (if Apple uses ANE)
-Uncertainty: High (Apple decides ANE scheduling)
-
-For this project, Metal (~2700 GFLOPS) and Accelerate (~670 GFLOPS)
-demonstrate hardware acceleration without Core ML complexity.
-
-See ANE_RESEARCH.md for full details.`
-
-	if !available {
-		return &ANEBackend{
-			available: false,
-			reason:    reason,
-		}, fmt.Errorf("ANE not implemented (requires Core ML): see ANE_RESEARCH.md")
+// NewANEBackendWithSize creates an ANE backend for specific matrix dimensions.
+//
+// MPSGraph compiles the computation graph for these dimensions. For different
+// sizes, you need a new executor (compilation overhead ~10-50ms).
+func NewANEBackendWithSize(m, n, k int) (*ANEBackend, error) {
+	// Create executor for these dimensions
+	executor := C.ane_create_executor(C.int(m), C.int(n), C.int(k))
+	if executor == nil {
+		return nil, fmt.Errorf("failed to create ANE executor (Metal device not available?)")
 	}
 
 	return &ANEBackend{
-		available: available,
-		reason:    reason,
+		available: true,
+		executor:  unsafe.Pointer(executor),
+		m:         m,
+		n:         n,
+		k:         k,
 	}, nil
 }
 
@@ -630,31 +629,91 @@ func (a *ANEBackend) IsAvailable() bool {
 // DeviceName returns the ANE device name.
 func (a *ANEBackend) DeviceName() string {
 	if a.available {
-		return "Apple Neural Engine (M4 Max, ~38 TFLOPS)"
+		info := C.GoString(C.ane_get_info())
+		return fmt.Sprintf("ANE via MPSGraph (%dx%d matrices) - %s", a.m, a.n, info)
 	}
-	return "ANE (not implemented: requires Core ML)"
+	return "ANE (not available)"
 }
 
-// MatMul performs matrix multiplication on ANE.
+// MatMul performs matrix multiplication using MPSGraph (which may use ANE).
 //
-// Currently returns an error explaining what's needed for implementation.
+// IMPORTANT: The matrices must match the executor's dimensions (m×k @ k×n).
+// For different sizes, create a new ANEBackend with NewANEBackendWithSize().
 //
-// If implemented, expected performance (M4 Max):
-//   - 128×128:  ~0.005 ms (52,000 GFLOPS)
-//   - 512×512:  ~0.020 ms (13,500 GFLOPS)
-//   - 1024×1024: ~0.100 ms (21,500 GFLOPS)
-//   - Speedup: 10-50x over Metal GPU
+// Performance (M4 Max, estimated):
+//   - May use ANE: ~0.020-0.100 ms (10,000-50,000 GFLOPS)
+//   - May use GPU: ~0.100-0.500 ms (500-5,000 GFLOPS)
+//   - Apple decides which accelerator based on many factors
 //
-// Caveats:
-//   - Only if Apple schedules on ANE (not guaranteed)
-//   - May use FP16 internally (precision loss)
-//   - Must recompile for different tensor sizes
+// To verify which accelerator is used:
+//   1. Run: sudo xcode-select -s /Applications/Xcode.app
+//   2. Open Instruments.app
+//   3. Choose "Logging" template
+//   4. Filter for "com.apple.mps" or "com.apple.ane"
+//   5. Run your code and check the log
 func (a *ANEBackend) MatMul(x, y *Tensor) (*Tensor, error) {
 	if !a.available {
-		return nil, fmt.Errorf("ANE not available: %s", a.reason)
+		return nil, fmt.Errorf("ANE backend not available")
 	}
 
-	return nil, fmt.Errorf("ANE MatMul not implemented (see ANE_RESEARCH.md for details)")
+	// Validate dimensions
+	if len(x.shape) != 2 || len(y.shape) != 2 {
+		return nil, fmt.Errorf("ANE MatMul requires 2D tensors")
+	}
+
+	xM, xK := x.shape[0], x.shape[1]
+	yK, yN := y.shape[0], y.shape[1]
+
+	if xK != yK {
+		return nil, fmt.Errorf("ANE MatMul: incompatible dimensions %dx%d @ %dx%d", xM, xK, yK, yN)
+	}
+
+	if xM != a.m || yK != a.k || yN != a.n {
+		return nil, fmt.Errorf("ANE MatMul: executor compiled for %dx%d @ %dx%d, got %dx%d @ %dx%d",
+			a.m, a.k, a.k, a.n, xM, xK, yK, yN)
+	}
+
+	// Convert float64 to float32 (MPSGraph uses FP32)
+	xF32 := make([]float32, len(x.data))
+	yF32 := make([]float32, len(y.data))
+	for i := range x.data {
+		xF32[i] = float32(x.data[i])
+	}
+	for i := range y.data {
+		yF32[i] = float32(y.data[i])
+	}
+
+	// Allocate output
+	out := NewTensor(xM, yN)
+	outF32 := make([]float32, len(out.data))
+
+	// Execute via MPSGraph
+	result := C.ane_execute_matmul(
+		C.ANEExecutorHandle(a.executor),
+		(*C.float)(unsafe.Pointer(&xF32[0])),
+		(*C.float)(unsafe.Pointer(&yF32[0])),
+		(*C.float)(unsafe.Pointer(&outF32[0])),
+	)
+
+	if result != 0 {
+		return nil, fmt.Errorf("ANE execution failed with code %d", result)
+	}
+
+	// Convert back to float64
+	for i := range outF32 {
+		out.data[i] = float64(outF32[i])
+	}
+
+	return out, nil
+}
+
+// Close cleans up ANE resources.
+func (a *ANEBackend) Close() {
+	if a.executor != nil {
+		C.ane_destroy_executor(C.ANEExecutorHandle(a.executor))
+		a.executor = nil
+		a.available = false
+	}
 }
 
 // ANECapabilities returns information about ANE capabilities and constraints.

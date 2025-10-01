@@ -1,8 +1,9 @@
-// +build arm64,!cgo
+// +build darwin,arm64,!cgo
 
 // ===========================================================================
-// ARM NEON SIMD Matrix Multiplication (arm64)
+// ARM NEON SIMD Matrix Multiplication (arm64) - macOS only
 // ===========================================================================
+// Linux uses matmul_neon_linux.go with naive fallback
 //
 // NOTE: This file is only compiled when CGo is NOT enabled.
 // Go doesn't allow mixing CGo and assembly in the same package.

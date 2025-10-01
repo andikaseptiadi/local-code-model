@@ -1,4 +1,4 @@
-// +build arm64,!cgo
+// +build darwin,arm64,!cgo
 
 package main
 

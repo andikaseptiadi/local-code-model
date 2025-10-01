@@ -1,0 +1,109 @@
+{
+  "timestamp": "2025-10-01T03:52:50.392791107Z",
+  "hardware": {
+    "os": "linux",
+    "arch": "arm64",
+    "cpu_model": "ARM64 (possibly Graviton, detected via GOARCH=arm64)",
+    "num_cpu": 8,
+    "cache_line_size": 0,
+    "l1_cache_kb": 0,
+    "l2_cache_kb": 0,
+    "l3_cache_kb": 0,
+    "memory_gb": 0,
+    "has_metal": false,
+    "has_ane": false,
+    "has_sve": false,
+    "has_neon": true
+  },
+  "results": [
+    {
+      "strategy": "Naive",
+      "level": 0,
+      "size": 128,
+      "iterations": 3,
+      "total_time_ns": 56805789,
+      "avg_time_ns": 18935263,
+      "gflops": 0.2215075650124321,
+      "speedup_vs_naive": 1,
+      "memory_mb": 0.375
+    },
+    {
+      "strategy": "Parallel",
+      "level": 1,
+      "size": 128,
+      "iterations": 3,
+      "total_time_ns": 7677684,
+      "avg_time_ns": 2559228,
+      "gflops": 1.638894229040945,
+      "speedup_vs_naive": 7.398818315523274,
+      "memory_mb": 0.375
+    },
+    {
+      "strategy": "CacheBlocked",
+      "level": 2,
+      "size": 128,
+      "iterations": 3,
+      "total_time_ns": 47166191,
+      "avg_time_ns": 15722063,
+      "gflops": 0.26677822115329264,
+      "speedup_vs_naive": 1.2043752146267317,
+      "memory_mb": 0.375
+    },
+    {
+      "strategy": "CachedParallel",
+      "level": 3,
+      "size": 128,
+      "iterations": 3,
+      "total_time_ns": 47538495,
+      "avg_time_ns": 15846165,
+      "gflops": 0.264688901068492,
+      "speedup_vs_naive": 1.194942940452785,
+      "memory_mb": 0.375
+    },
+    {
+      "strategy": "Naive",
+      "level": 0,
+      "size": 256,
+      "iterations": 3,
+      "total_time_ns": 454103079,
+      "avg_time_ns": 151367693,
+      "gflops": 0.22167499110923228,
+      "speedup_vs_naive": 1,
+      "memory_mb": 1.5
+    },
+    {
+      "strategy": "Parallel",
+      "level": 1,
+      "size": 256,
+      "iterations": 3,
+      "total_time_ns": 57545036,
+      "avg_time_ns": 19181678,
+      "gflops": 1.7492959687885492,
+      "speedup_vs_naive": 7.891264413884958,
+      "memory_mb": 1.5
+    },
+    {
+      "strategy": "CacheBlocked",
+      "level": 2,
+      "size": 256,
+      "iterations": 3,
+      "total_time_ns": 397121754,
+      "avg_time_ns": 132373918,
+      "gflops": 0.25348220032287627,
+      "speedup_vs_naive": 1.1434857809376011,
+      "memory_mb": 1.5
+    },
+    {
+      "strategy": "CachedParallel",
+      "level": 3,
+      "size": 256,
+      "iterations": 3,
+      "total_time_ns": 397219316,
+      "avg_time_ns": 132406438,
+      "gflops": 0.2534199432205857,
+      "speedup_vs_naive": 1.1432049323764755,
+      "memory_mb": 1.5
+    }
+  ],
+  "baseline_gflops": 0.22167499110923228
+}

@@ -1,0 +1,152 @@
+// +build darwin,arm64
+
+
+// ===========================================================================
+// SVE Matrix Multiplication for AWS Graviton3/3E/4 - macOS placeholder
+// ===========================================================================
+//
+// ARM Scalable Vector Extension (SVE) implementation for matrix multiplication.
+// NOTE: This is a placeholder for macOS. Go assembler doesn't fully support SVE.
+// Linux uses matmul_sve.c (C intrinsics) instead.
+//
+// SVE ADVANTAGES over NEON:
+//   - Vector-length agnostic (works on 256-bit G3, 512-bit G4)
+//   - Better register utilization
+//   - Predication for handling edge cases
+//   - Gather/scatter for non-contiguous memory
+//
+// GRAVITON SUPPORT:
+//   - Graviton2: NO SVE (use NEON)
+//   - Graviton3/3E: 256-bit SVE
+//   - Graviton4: 512-bit SVE2
+//
+// PERFORMANCE EXPECTATIONS:
+//   - Graviton3: 1.5-2× faster than NEON
+//   - Graviton4: 2-2.5× faster than NEON
+//
+// ===========================================================================
+
+//go:build linux && arm64
+
+#include "textflag.h"
+
+// func matmulSVE(c, a, b *float64, m, n, k int)
+//
+// Matrix multiplication: C = A * B
+//   A: m×k matrix
+//   B: k×n matrix
+//   C: m×n result matrix
+//
+// SVE implementation using vector-length agnostic programming.
+// Works on any SVE vector length (256-bit on G3, up to 512-bit on G4).
+//
+// NOTE: This is a PLACEHOLDER scalar implementation because:
+// 1. Go's assembler doesn't yet support SVE instructions
+// 2. SVE requires special assembler directives (RDVL, LD1D, FMLA, etc.)
+// 3. Full SVE implementation would require external assembly or compiler intrinsics
+//
+// For production use, consider:
+// - Using Go compiler with -march=armv8.2-a+sve
+// - External .s file assembled with GNU as
+// - CGo with C intrinsics (#include <arm_sve.h>)
+//
+// This scalar version serves as documentation of the algorithm.
+// Real SVE implementation would be 4-8× faster.
+//
+TEXT ·matmulSVE(SB), NOSPLIT, $0-48
+    MOVD c+0(FP), R0    // C matrix base pointer
+    MOVD a+8(FP), R1    // A matrix base pointer
+    MOVD b+16(FP), R2   // B matrix base pointer
+    MOVD m+24(FP), R3   // m (rows of A)
+    MOVD n+32(FP), R4   // n (cols of B)
+    MOVD k+40(FP), R5   // k (cols of A, rows of B)
+
+    // Initialize loop counters
+    MOVD $0, R6         // i (row counter)
+
+outer_loop:
+    CMP R6, R3          // if i >= m, done
+    BGE done
+
+    MOVD $0, R7         // j (column counter)
+
+middle_loop:
+    CMP R7, R4          // if j >= n, next row
+    BGE next_row
+
+    // Calculate C[i][j] address: c + (i*n + j)*8
+    MUL R6, R4, R8      // i * n
+    ADD R7, R8          // i*n + j
+    LSL $3, R8          // multiply by 8 (sizeof float64)
+    ADD R0, R8, R9      // C[i][j] address in R9
+
+    // Initialize accumulator to 0
+    FMOVD $0.0, F0
+
+    MOVD $0, R10        // l (inner loop counter)
+
+inner_loop:
+    CMP R10, R5         // if l >= k, store result
+    BGE store_result
+
+    // Calculate A[i][l] address: a + (i*k + l)*8
+    MUL R6, R5, R11     // i * k
+    ADD R10, R11        // i*k + l
+    LSL $3, R11         // multiply by 8
+    ADD R1, R11, R12    // A[i][l] address in R12
+
+    // Calculate B[l][j] address: b + (l*n + j)*8
+    MUL R10, R4, R11    // l * n
+    ADD R7, R11         // l*n + j
+    LSL $3, R11         // multiply by 8
+    ADD R2, R11, R13    // B[l][j] address in R13
+
+    // Load values and multiply-accumulate
+    FMOVD (R12), F1     // A[i][l]
+    FMOVD (R13), F2     // B[l][j]
+    FMADDD F1, F2, F0   // F0 += F1 * F2 (fused multiply-add)
+
+    ADD $1, R10         // l++
+    B inner_loop
+
+store_result:
+    FMOVD F0, (R9)      // Store C[i][j]
+
+    ADD $1, R7          // j++
+    B middle_loop
+
+next_row:
+    ADD $1, R6          // i++
+    B outer_loop
+
+done:
+    RET
+
+// ===========================================================================
+// NOTE: Full SVE Implementation
+// ===========================================================================
+//
+// The above is a scalar fallback. A true SVE implementation would:
+//
+// 1. Use RDVL (Read Vector Length) to get runtime vector length
+// 2. Process multiple elements per iteration using SVE vectors
+// 3. Use predication for edge cases
+// 4. Leverage FMLA (Fused Multiply-Add) for accumulation
+//
+// Example SVE vectorization for inner loop:
+//
+//   RDVL R14, #1              // Get vector length in bytes
+//   LSR $3, R14, R14          // Divide by 8 (float64 size) -> elements per vector
+//
+//   // Process k elements in chunks of vector_length
+//   sve_inner_loop:
+//     WHILELT P0.D, R10, R5   // Predicate: which elements valid?
+//     LD1D (R12), P0/Z, Z1.D  // Load A[i][l:l+VL] with predication
+//     LD1D (R13), P0/Z, Z2.D  // Load B[l:l+VL][j] with predication
+//     FMLA Z0.D, P0/M, Z1.D, Z2.D  // C += A * B (predicated)
+//     INCB R10, R14           // l += vector_length
+//     B.FIRST sve_inner_loop
+//
+// This would provide 4-8× speedup on Graviton3/4.
+//
+// ===========================================================================

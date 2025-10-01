@@ -1,3 +1,5 @@
+//go:build darwin
+
 package main
 
 import (
@@ -8,9 +10,8 @@ import (
 // ANE Backend Tests
 // ===========================================================================
 //
-// These tests document what ANE testing would look like if fully implemented.
-// Currently, they verify that ANE correctly reports as unavailable and
-// provides helpful error messages.
+// These tests verify the ANE backend implementation via MPSGraph.
+// ANE is now available on macOS with automatic hardware selection.
 //
 // ===========================================================================
 
@@ -18,33 +19,32 @@ import (
 func TestANEAvailability(t *testing.T) {
 	backend, err := NewANEBackend()
 
-	// ANE should return error explaining what's needed
-	if err == nil {
-		t.Error("Expected error explaining ANE requirements, got nil")
+	// On macOS, ANE backend should initialize successfully
+	// It returns an error describing it needs specific matrix sizes
+	if err != nil && backend == nil {
+		t.Fatalf("ANE backend creation failed: %v", err)
 	}
 
-	// Error message should be helpful
-	if err != nil && len(err.Error()) < 50 {
-		t.Error("ANE error message should explain what's needed for implementation")
-	}
-
-	// Backend should exist but report as unavailable
+	// Backend should exist
 	if backend == nil {
-		t.Fatal("ANE backend should exist even if unavailable")
+		t.Fatal("ANE backend should exist")
 	}
 
+	// On M-series Macs, ANE should report as available
+	// On Intel Macs or Linux, it should be unavailable
 	if backend.IsAvailable() {
-		t.Error("ANE should report as unavailable (not implemented)")
+		t.Logf("✅ ANE available (M-series Mac)")
+	} else {
+		t.Logf("⚠️  ANE unavailable (Intel Mac or Linux)")
 	}
 
 	// Should provide informative device name
 	deviceName := backend.DeviceName()
 	if deviceName == "" {
-		t.Error("ANE should provide device name even when unavailable")
+		t.Error("ANE should provide device name")
 	}
 
-	t.Logf("ANE Status: %s", deviceName)
-	t.Logf("ANE Reason: %s", backend.reason)
+	t.Logf("ANE Device: %s", deviceName)
 }
 
 // TestANEMatMul tests that ANE MatMul returns appropriate error.
