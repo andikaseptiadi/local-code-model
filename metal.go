@@ -2,6 +2,133 @@
 
 package main
 
+// ===========================================================================
+// WHAT'S GOING ON HERE
+// ===========================================================================
+//
+// This file provides the bridge from Go to Metal GPU and Apple Neural Engine.
+// It's the gateway to specialized hardware acceleration - moving from CPU
+// (1-100 GFLOPS) to GPU (1000s of GFLOPS) to ANE (10,000s of GFLOPS).
+//
+// INTENTION:
+// Create CGo bindings to Apple's Metal Performance Shaders (MPS) framework
+// and Core ML for ANE access. Show the interface design even though the
+// full implementation requires substantial Objective-C code.
+//
+// WHERE THIS SITS ON THE CONTINUUM OF NAIVETE:
+//
+// Level 4: Metal GPU Backend (MetalBackend)
+//   - Uses Metal Performance Shaders (MPS) for matrix operations
+//   - GPU: M4 Max has 40 GPU cores @ ~4 TFLOPS (fp32)
+//   - Expected speedup: 50-200x over naive for large matrices (>512×512)
+//   - Overhead: 1-5ms for data copy to/from GPU
+//   - Efficient for: Training, large batch inference, fp16/fp32 operations
+//   - Implementation status: Interface defined, needs MPS integration
+//
+// Level 5: Apple Neural Engine Backend (ANEBackend)
+//   - Uses Core ML to access ANE (Apple Neural Engine)
+//   - ANE: 16 cores @ 38 TOPS (int8), ~19 TFLOPS (fp16)
+//   - Expected speedup: 500-1000x over naive for int8 inference
+//   - Overhead: 10-50ms for model compilation/loading (one-time)
+//   - Efficient for: Inference, quantized models, batch operations
+//   - Implementation status: Interface defined, needs Core ML integration
+//
+// PERFORMANCE CHARACTERISTICS:
+//
+// When to use each backend:
+//
+// CPU (naive/parallel/cache-blocked):
+//   - Small matrices (n < 256)
+//   - Development/debugging
+//   - When latency matters more than throughput
+//   - Performance: 1-100 GFLOPS
+//
+// Metal GPU:
+//   - Training (fp32 needed)
+//   - Large matrices (n > 512)
+//   - Batch inference (fp16/fp32)
+//   - When GPU is available and not busy
+//   - Performance: 500-4000 GFLOPS
+//   - Latency: Data copy overhead ~1-5ms
+//
+// ANE (Neural Engine):
+//   - Inference only (no gradients)
+//   - Quantized models (int8/fp16)
+//   - Maximum throughput for inference
+//   - When power efficiency matters (ANE uses ~5W vs GPU ~30W)
+//   - Performance: 10,000-38,000 GFLOPS (int8)
+//   - Latency: Model load overhead ~10-50ms (one-time)
+//
+// THE KEY INSIGHT: SPECIALIZATION WINS
+//
+// Each hardware unit is optimized for different workloads:
+//
+// CPU:
+//   - General purpose
+//   - Low latency
+//   - Full precision control
+//   - Good for: Everything, especially small problems
+//
+// GPU:
+//   - Massively parallel (thousands of cores)
+//   - High throughput
+//   - Optimized for graphics and compute shaders
+//   - Good for: Large parallel workloads, fp16/fp32
+//
+// ANE:
+//   - Specialized matrix engines
+//   - Ultra high throughput
+//   - Optimized for convolutions and matmuls
+//   - Fixed-point and fp16 only
+//   - Good for: Neural network inference at scale
+//
+// WHY CGO AND NOT PURE GO:
+//
+// Metal and Core ML are Objective-C frameworks. While Go has excellent
+// systems programming capabilities, interfacing with macOS frameworks
+// requires CGo. The tradeoff:
+//
+// Pros of CGo:
+//   - Direct access to Metal/Core ML
+//   - Can use optimized Apple frameworks
+//   - 100-1000x performance gains
+//
+// Cons of CGo:
+//   - Slower compilation
+//   - More complex build process
+//   - Cross-compilation challenges
+//   - Need Xcode/Command Line Tools
+//
+// For ML workloads, the performance gain far outweighs the complexity.
+//
+// IMPLEMENTATION STATUS:
+//
+// Current state: INTERFACE DEFINED, STUBS ONLY
+//
+// What's implemented:
+//   ✓ Backend detection (Metal/ANE availability)
+//   ✓ Device enumeration
+//   ✓ CGo bindings structure
+//   ✓ Error handling patterns
+//
+// What needs implementation:
+//   - Metal buffer creation/management
+//   - MPSMatrixMultiplication setup and execution
+//   - Core ML model compilation from tensor operations
+//   - ANE execution and result marshaling
+//
+// Why stub it out?
+// To show the architecture and interface design. The actual implementation
+// is ~500-1000 lines of Objective-C, which would obscure the learning goals
+// of this project (understanding transformers and optimization progression).
+//
+// For production use, you'd either:
+//   1. Implement full Metal/Core ML integration (~1-2 weeks of work)
+//   2. Use existing ML frameworks (PyTorch, TensorFlow) via CGo
+//   3. Use specialized Go ML libraries when they mature
+//
+// ===========================================================================
+
 /*
 #cgo CFLAGS: -x objective-c
 #cgo LDFLAGS: -framework Metal -framework MetalPerformanceShaders -framework Foundation

@@ -5,6 +5,60 @@ import (
 	"sync"
 )
 
+// ===========================================================================
+// WHAT'S GOING ON HERE
+// ===========================================================================
+//
+// This file implements parallel execution of matrix operations using goroutines.
+// It's the first step up from naive single-threaded code on the optimization
+// continuum.
+//
+// INTENTION:
+// Expose CPU parallelism as a configurable option. Let the user choose between
+// single-threaded (deterministic, debuggable) and parallel (faster) modes at
+// runtime. Show that simply throwing goroutines at the problem doesn't solve
+// everything - you hit memory bandwidth limits quickly.
+//
+// WHERE THIS SITS ON THE CONTINUUM OF NAIVETE:
+//
+// Level 1: Parallel execution (THIS FILE)
+//   - Splits matrix rows across CPU cores
+//   - Uses goroutines and sync.WaitGroup for coordination
+//   - Expected speedup: 1.05-2x on M4 Max (12 P-cores)
+//   - Why so little? Memory bandwidth saturation, not compute-bound!
+//   - Goroutine overhead dominates for small problems
+//
+// What's stranded:
+//   - Cache hierarchy (still thrashing L1/L2)
+//   - SIMD units (not vectorized)
+//   - GPU (not used)
+//   - ANE (not used)
+//
+// PERFORMANCE CHARACTERISTICS:
+// For matrix multiplication (n×n matrices):
+//   - n < 64:   Slower than single-threaded (goroutine overhead)
+//   - n = 128:  ~1.05x speedup
+//   - n = 512:  ~1.5-2x speedup
+//   - n = 2048: ~2-3x speedup (limited by memory bandwidth, not CPU)
+//
+// THE KEY INSIGHT:
+// Modern CPUs can read/write memory at ~400 GB/s (M4 Max unified memory).
+// Matrix multiply is O(n³) operations but O(n²) memory accesses. For large
+// matrices, you're waiting on memory, not ALUs. More cores just means more
+// cores waiting on the same memory bus.
+//
+// This is why cache blocking (matmul_optimized.go) matters so much - it
+// reduces memory traffic by keeping data in faster caches.
+//
+// WHAT THIS TEACHES:
+// Parallelism is necessary but not sufficient. You need:
+//   1. Parallelism (this file) - use all cores
+//   2. Cache optimization (matmul_optimized.go) - reduce memory traffic
+//   3. Vectorization (SIMD) - do more per instruction
+//   4. Specialized hardware (GPU/ANE) - massively parallel + high bandwidth
+//
+// ===========================================================================
+
 // ComputeConfig controls parallelization behavior for tensor operations.
 //
 // This allows switching between single-threaded (deterministic, easier debugging)

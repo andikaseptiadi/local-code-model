@@ -1,5 +1,75 @@
 package main
 
+// ===========================================================================
+// WHAT'S GOING ON HERE
+// ===========================================================================
+//
+// This file defines the abstraction layer for different compute backends:
+// CPU, Metal GPU, and Apple Neural Engine. It's about making "stranded
+// resources" visible and accessible.
+//
+// INTENTION:
+// Create a unified interface to select hardware acceleration at runtime.
+// Show the progression from CPU-only to specialized accelerators. Make it
+// explicit what hardware is available and what each is good at.
+//
+// WHERE THIS SITS ON THE CONTINUUM OF NAIVETE:
+//
+// This is the INTERFACE layer - it doesn't implement optimizations itself,
+// but provides the abstraction to choose between them:
+//
+// BackendCPU (compute.go, matmul_optimized.go):
+//   - Level 0-3: Naive, parallel, cache-blocked
+//   - 1-100 GFLOPS depending on optimization level
+//   - Always available
+//
+// BackendMetal (metal.go):
+//   - Level 4: GPU acceleration via Metal Performance Shaders
+//   - ~4000 GFLOPS (fp32), ~8000 GFLOPS (fp16)
+//   - Available on macOS/iOS with Metal-capable GPU
+//   - Efficient for matrices >512×512
+//   - Overhead: ~1-5ms for data transfer
+//
+// BackendANE (metal.go):
+//   - Level 5: Neural Engine via Core ML
+//   - ~38 TOPS (int8), ~19 TFLOPS (fp16)
+//   - Available on M-series and A-series chips
+//   - Efficient for batched inference with quantized models
+//   - Overhead: ~10-50ms for model compilation/loading
+//
+// THE KEY CONCEPT: STRANDED RESOURCES
+// Most code only uses the CPU - even though your system has:
+//   - 12-16 CPU cores (M4 Max)
+//   - GPU with thousands of shader cores
+//   - Neural Engine with 16 cores
+//
+// Each level of the hierarchy has different characteristics:
+//   - CPU: General purpose, low latency, ~100 GFLOPS
+//   - GPU: Massively parallel, higher latency, ~4000 GFLOPS
+//   - ANE: Specialized for neural nets, highest throughput, ~38 TOPS
+//
+// PERFORMANCE CHARACTERISTICS:
+// Backend selection depends on problem size and precision requirements:
+//
+// Small problems (n < 256):
+//   - CPU wins (overhead of GPU/ANE dominates)
+//
+// Medium problems (256 < n < 2048):
+//   - GPU starts to win for fp16/fp32
+//   - CPU still competitive with cache blocking
+//
+// Large problems (n > 2048):
+//   - GPU strongly preferred for training
+//   - ANE preferred for int8 inference
+//
+// WHY THIS APPROACH:
+// By exposing the backend as a configuration choice, we:
+//   1. Make performance tradeoffs visible and controllable
+//   2. Allow users to benchmark their specific workloads
+//   3. Support development (CPU) and production (GPU/ANE) from same code
+//   4. Teach how modern ML systems actually work under the hood
+//
+// ===========================================================================
 // RECOMMENDED READING:
 //
 // Metal Programming Guide:
@@ -15,6 +85,7 @@ package main
 //
 // - "Integrating a Core ML Model into Your App"
 //   Shows ANE integration patterns
+// ===========================================================================
 
 // ComputeBackend represents different hardware accelerators available on the system.
 type ComputeBackend int

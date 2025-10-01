@@ -7,6 +7,53 @@ import (
 	"math/rand"
 )
 
+// ===========================================================================
+// WHAT'S GOING ON HERE
+// ===========================================================================
+//
+// This file implements the fundamental tensor abstraction - multi-dimensional
+// arrays that serve as the building blocks for neural networks. Think of this
+// as a simplified NumPy in pure Go.
+//
+// INTENTION:
+// Create a minimal but correct tensor library that can support transformer
+// training and inference. This is deliberately naive - no SIMD, no GPU, just
+// clear straightforward Go code that demonstrates the core concepts.
+//
+// WHERE THIS SITS ON THE CONTINUUM OF NAIVETE:
+//
+// Level 0 (THIS FILE): Pure Go, single-threaded operations
+//   - O(n³) naive matrix multiplication
+//   - No cache optimization, no vectorization
+//   - Expected: 1-2 GFLOPS on modern hardware
+//   - Good for: Learning, debugging, small models
+//
+// Next level (compute.go): Parallel execution via goroutines
+//   - Splits work across CPU cores
+//   - Expected: 2-5x speedup (memory bandwidth limited)
+//
+// Advanced levels (matmul_optimized.go):
+//   - Cache blocking: 2-4x additional gain
+//   - SIMD vectorization: 2-4x on top of that
+//   - GPU (Metal): 50-200x for large matrices
+//   - Neural Engine: 500-1000x for int8
+//
+// PERFORMANCE CHARACTERISTICS:
+// Operations scale as follows (n = typical dimension):
+//   - Element-wise (Add, Scale, ReLU): O(n), ~0.1-1 μs for n=1000
+//   - Matrix multiply: O(n³), ~10 ms for n=512 (the bottleneck!)
+//   - Softmax: O(n²), ~1 ms for n=512
+//
+// The matrix multiplication dominates all neural network computation.
+// Everything else is essentially free in comparison.
+//
+// WHY THIS APPROACH:
+// Starting with the simplest possible correct implementation makes it easy
+// to understand what's happening, debug issues, and serve as a reference
+// for testing optimized versions. The optimization journey (naive -> parallel
+// -> cache-blocked -> SIMD -> GPU -> ANE) is the real educational value.
+//
+// ===========================================================================
 // RECOMMENDED READING:
 //
 // Deep Learning Foundations:
@@ -21,6 +68,7 @@ import (
 // Implementation:
 // - "Programming Massively Parallel Processors" by Hwu, Kirk, Hajj (2022)
 //   GPU optimization techniques for tensor operations
+// ===========================================================================
 
 var (
 	// ErrShapeMismatch indicates incompatible tensor shapes for an operation.
