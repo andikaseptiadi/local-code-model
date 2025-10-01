@@ -1,3 +1,5 @@
+// +build linux,arm64,cgo
+
 // ARM Compute Library C++ Wrapper
 // Provides C interface for Go CGo bindings
 
