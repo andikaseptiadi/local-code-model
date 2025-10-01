@@ -380,16 +380,16 @@ func TrainStep(model *GPT, batch [][]int, targets [][]int, optimizer Optimizer, 
 	totalLoss := 0.0
 
 	for i := range batch {
-		// Forward
-		logits := model.Forward(batch[i])
+		// Forward with caching (stores activations for backward)
+		logits, cache := model.ForwardWithCache(batch[i])
 
 		// Compute loss
 		loss := CrossEntropyLoss(logits, targets[i])
 		totalLoss += loss
 
 		// Backward (compute gradients)
-		// TODO: Implement backward pass
-		// This requires automatic differentiation or manual gradient computation
+		gradLogits := CrossEntropyBackward(logits, targets[i])
+		model.Backward(gradLogits, cache)
 	}
 
 	// Average loss
@@ -507,9 +507,13 @@ func Train(model *GPT, trainData, valData [][][]int, config TrainingConfig) {
 			//  just shifted by one token)
 			inputs := make([][]int, len(batch))
 			targets := make([][]int, len(batch))
-			for j, seq := range batch {
-				inputs[j] = seq[0 : len(seq)-1]
-				targets[j] = seq[1:]
+			for j, seqs := range batch {
+				// seqs is [][]int, take first sequence
+				if len(seqs) > 0 && len(seqs[0]) > 1 {
+					seq := seqs[0]
+					inputs[j] = seq[0 : len(seq)-1]
+					targets[j] = seq[1:]
+				}
 			}
 
 			// Get current learning rate
@@ -557,9 +561,13 @@ func Evaluate(model *GPT, valData [][][]int, batchSize int) float64 {
 		// Extract inputs and targets
 		inputs := make([][]int, len(batch))
 		targets := make([][]int, len(batch))
-		for j, seq := range batch {
-			inputs[j] = seq[0 : len(seq)-1]
-			targets[j] = seq[1:]
+		for j, seqs := range batch {
+			// seqs is [][]int, take first sequence
+			if len(seqs) > 0 && len(seqs[0]) > 1 {
+				seq := seqs[0]
+				inputs[j] = seq[0 : len(seq)-1]
+				targets[j] = seq[1:]
+			}
 		}
 
 		// Forward pass only (no gradients)
