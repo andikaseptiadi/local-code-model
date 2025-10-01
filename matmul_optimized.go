@@ -293,28 +293,23 @@ func MatMulCacheBlockedParallel(a, b *Tensor, blockSize int, cfg ComputeConfig) 
 //
 // ARM NEON (M4 Max):
 // - 128-bit SIMD registers (4x float32 or 2x float64)
-// - SVE (Scalable Vector Extension): up to 512-bit vectors
+// - SVE (Scalable Vector Extension): up to 512-bit vectors (not used yet)
 // - Operations: FADD, FMUL, FMA (fused multiply-add)
 //
 // VECTORIZATION STRATEGY:
-// - Inner loop processes 4 elements at a time (float32)
-// - Use FMA instructions for efficiency
-// - Requires Go assembly or compiler auto-vectorization
+// - Inner loop processes 2 float64 elements at a time
+// - Implemented in Go assembly (matmul_neon_arm64.s)
+// - Falls back to cache-blocked on non-ARM64 platforms
 //
-// For now, this is a placeholder that shows the interface.
-// Full implementation would use Go assembly (*.s files) with NEON intrinsics.
-func MatMulSIMD(a, b *Tensor) *Tensor {
-	// TODO: Implement with Go assembly using ARM NEON
-	// For reference, see: src/math/dim_arm64.s in Go stdlib
-	//
-	// Expected implementation:
-	// - Inner loop in assembly using NEON VLD/VST, FMLA
-	// - Process 4 float32s or 2 float64s per iteration
-	// - Requires block layout for efficient memory access
-
-	// For now, fall back to cache-blocked version
-	return MatMulCacheBlocked(a, b, 64)
-}
+// PERFORMANCE:
+// - Expected: 2-4x over cache-blocked
+// - Best for medium matrices (128-512)
+// - On ARM64: Uses matmul_neon_arm64.s
+// - On other platforms: Falls back to cache-blocked
+//
+// This function is defined in matmul_simd.go (ARM64) or
+// matmul_simd_stub.go (other platforms).
+// The actual implementation is in matmul_neon_arm64.s for ARM64.
 
 // MatMulWithStrategy performs matrix multiplication using specified strategy.
 func MatMulWithStrategy(a, b *Tensor, strategy MatMulStrategy, cfg BackendConfig) *Tensor {
