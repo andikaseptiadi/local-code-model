@@ -114,6 +114,7 @@ import (
 // - Level 1: Parallel (goroutines)
 // - Level 2: Cache-blocked (tiled)
 // - Level 3: SIMD vectorized (assembly)
+// - Level 3.5: Accelerate BLAS (Apple-optimized CPU)
 // - Level 4: Metal GPU
 // - Level 5: ANE
 
@@ -125,6 +126,7 @@ const (
 	StrategyParallel
 	StrategyCacheBlocked
 	StrategySIMD
+	StrategyAccelerate  // Apple Accelerate framework (BLAS)
 	StrategyMetal
 	StrategyANE
 )
@@ -330,17 +332,34 @@ func MatMulWithStrategy(a, b *Tensor, strategy MatMulStrategy, cfg BackendConfig
 	case StrategySIMD:
 		return MatMulSIMD(a, b)
 
+	case StrategyAccelerate:
+		// Try Accelerate (Apple BLAS), fall back to cache-blocked
+		// Only available on macOS with darwin,cgo build tags
+		if accel, err := NewAccelerateBackend(); err == nil {
+			if result, err := accel.MatMul(a, b); err == nil {
+				return result
+			}
+		}
+		// Fallback if Accelerate fails or not available
+		return MatMulCacheBlocked(a, b, 64)
+
 	case StrategyMetal:
-		// Try Metal, fall back to cache-blocked
+		// Try Metal, fall back to Accelerate, then cache-blocked
 		if metal, err := NewMetalBackend(); err == nil {
 			if result, err := metal.MatMul(a, b); err == nil {
+				return result
+			}
+		}
+		// Try Accelerate as fallback
+		if accel, err := NewAccelerateBackend(); err == nil {
+			if result, err := accel.MatMul(a, b); err == nil {
 				return result
 			}
 		}
 		return MatMulCacheBlocked(a, b, 64)
 
 	case StrategyANE:
-		// Try ANE, fall back to Metal, then cache-blocked
+		// Try ANE, fall back to Metal, Accelerate, then cache-blocked
 		if ane, err := NewANEBackend(); err == nil {
 			if result, err := ane.MatMul(a, b); err == nil {
 				return result
@@ -349,6 +368,12 @@ func MatMulWithStrategy(a, b *Tensor, strategy MatMulStrategy, cfg BackendConfig
 		// Fall through to Metal
 		if metal, err := NewMetalBackend(); err == nil {
 			if result, err := metal.MatMul(a, b); err == nil {
+				return result
+			}
+		}
+		// Fall through to Accelerate
+		if accel, err := NewAccelerateBackend(); err == nil {
+			if result, err := accel.MatMul(a, b); err == nil {
 				return result
 			}
 		}

@@ -94,9 +94,14 @@ const (
 	// BackendCPU uses standard Go CPU execution (multi-threaded).
 	BackendCPU ComputeBackend = iota
 
+	// BackendAccelerate uses Apple Accelerate framework (BLAS).
+	// Available on all macOS (Intel and Apple Silicon).
+	// Best for: medium matrices (256-2048), low overhead, CPU-only.
+	BackendAccelerate
+
 	// BackendMetal uses Metal Performance Shaders for GPU acceleration.
 	// Available on macOS/iOS with Metal-capable GPUs.
-	// Best for: large batches, fp16 operations, >512×512 matrices.
+	// Best for: large batches, fp16 operations, >2048×2048 matrices.
 	BackendMetal
 
 	// BackendANE uses Apple Neural Engine via Core ML.
