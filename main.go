@@ -80,6 +80,10 @@ func main() {
 	// Component benchmarks
 	fmt.Println("=== Component Performance ===")
 	benchmarkComponents(config)
+
+	// Parallel execution demo
+	fmt.Println()
+	DemoParallelExecution()
 }
 
 // calculateParameters estimates the number of parameters in the model.

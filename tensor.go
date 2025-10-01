@@ -240,34 +240,9 @@ func Scale(a *Tensor, scalar float64) *Tensor {
 // A must be (M, K), B must be (K, N), result is (M, N).
 //
 // This is the O(M*N*K) operation at the heart of neural networks.
-// Future optimizations: BLAS, GPU kernels, cache-friendly blocking.
+// Uses global compute configuration to determine parallel execution.
 func MatMul(a, b *Tensor) *Tensor {
-	if len(a.shape) != 2 || len(b.shape) != 2 {
-		panic("tensor: MatMul requires 2D tensors")
-	}
-
-	m, k1 := a.shape[0], a.shape[1]
-	k2, n := b.shape[0], b.shape[1]
-
-	if k1 != k2 {
-		panic(fmt.Sprintf("tensor: incompatible dimensions for matmul: (%d,%d) @ (%d,%d)", m, k1, k2, n))
-	}
-
-	out := NewTensor(m, n)
-
-	// Naive triple loop - O(M*N*K) complexity
-	// Cache-aware: iterate in row-major order
-	for i := 0; i < m; i++ {
-		for j := 0; j < n; j++ {
-			sum := 0.0
-			for k := 0; k < k1; k++ {
-				sum += a.At(i, k) * b.At(k, j)
-			}
-			out.Set(sum, i, j)
-		}
-	}
-
-	return out
+	return MatMulWithConfig(a, b, globalComputeConfig)
 }
 
 // Transpose returns the transpose of a 2D matrix: A^T.
