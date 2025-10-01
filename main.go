@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -10,6 +11,49 @@ func main() {
 	// Seed random number generator
 	rand.Seed(time.Now().UnixNano())
 
+	// Check for command-line mode
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		switch cmd {
+		case "benchmark":
+			if err := RunBenchmarkCommand(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "help", "-h", "--help":
+			printUsage()
+			return
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
+			printUsage()
+			os.Exit(1)
+		}
+	}
+
+	// Default: Run demo
+	runDemo()
+}
+
+func printUsage() {
+	fmt.Println("Usage:")
+	fmt.Println("  go run . [command] [options]")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  (none)     Run transformer demo (default)")
+	fmt.Println("  benchmark  Run performance benchmarks")
+	fmt.Println("  help       Show this help message")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  go run .                                    # Run demo")
+	fmt.Println("  go run . benchmark -quick                   # Quick benchmark")
+	fmt.Println("  go run . benchmark -json=results.json       # Save to JSON")
+	fmt.Println("  go run . benchmark -detect                  # Hardware detection only")
+	fmt.Println("  go run . benchmark -visualize -format=ascii # Show ASCII charts")
+	fmt.Println()
+}
+
+func runDemo() {
 	fmt.Println("=== GPT-style Transformer in Pure Go ===")
 	fmt.Println()
 
