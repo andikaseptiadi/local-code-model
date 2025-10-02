@@ -380,68 +380,20 @@ func handleCommand(cmd string, config *SampleConfig, maxTokens *int) error {
 	return nil
 }
 
-// setupBackend configures the compute backend for the model.
+// setupBackend validates backend selection for pure Go implementation.
 //
-// This is where we select which hardware accelerates inference.
-// The backend doesn't affect the output (semantics), only performance.
+// This pure Go version only supports CPU execution. The backend parameter
+// is kept for command-line compatibility but currently does nothing.
 //
-// WHY MULTIPLE BACKENDS?
-// Different hardware has different optimal implementations:
-//   - Accelerate (macOS): Uses BLAS/LAPACK from Apple's vDSP framework
-//   - Metal (macOS): Uses GPU via Metal API
-//   - CUDA (Linux+NVIDIA): Uses GPU via CUDA
-//   - SVE (ARM): Uses ARM Scalable Vector Extension
-//   - OpenBLAS (Linux): Optimized BLAS library for various CPUs
-//
-// Performance can vary 10-100x between backends on the same hardware!
-// For example, on M4 Max: naive ~5 GFLOPS, Accelerate ~50-100 GFLOPS.
-//
-// See backend.go for detailed explanation of backend selection strategy.
+// For production inference at scale, consider:
+// - Quantization (int8/int4) for smaller models
+// - Batch processing for higher throughput
+// - External frameworks with GPU support (ONNX Runtime, TensorFlow Lite)
 func setupBackend(model *GPT, backendName string) error {
-	switch backendName {
-	case "accelerate":
-		backend, err := NewAccelerateBackend()
-		if err != nil {
-			return err
-		}
-		model.SetBackend(backend)
-		fmt.Printf("✓ Using Accelerate framework backend\n")
-
-	case "metal":
-		backend, err := NewMetalBackend()
-		if err != nil {
-			return err
-		}
-		model.SetBackend(backend)
-		fmt.Printf("✓ Using Metal GPU backend\n")
-
-	case "cuda":
-		backend, err := NewCUDABackend()
-		if err != nil {
-			return err
-		}
-		model.SetBackend(backend)
-		fmt.Printf("✓ Using CUDA GPU backend\n")
-
-	case "sve":
-		backend, err := NewSVEBackend()
-		if err != nil {
-			return err
-		}
-		model.SetBackend(backend)
-		fmt.Printf("✓ Using ARM SVE backend\n")
-
-	case "openblas":
-		backend, err := NewOpenBLASBackend()
-		if err != nil {
-			return err
-		}
-		model.SetBackend(backend)
-		fmt.Printf("✓ Using OpenBLAS backend\n")
-
-	default:
-		return fmt.Errorf("unknown backend: %s", backendName)
+	if backendName != "" && backendName != "cpu" {
+		return fmt.Errorf("backend %q not available - only 'cpu' supported in pure Go build", backendName)
 	}
 
+	fmt.Printf("✓ Using pure Go CPU backend\n")
 	return nil
 }

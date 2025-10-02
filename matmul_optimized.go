@@ -31,14 +31,6 @@ import (
 //   - Each worker processes block rows (maintains cache locality)
 //   - Expected speedup: 8-12x over naive (on 12 P-cores)
 //   - Expected performance: 20-100 GFLOPS
-//   - Still stranded: SIMD units, GPU, ANE
-//
-// Level 4: SIMD (MatMulSIMD - stub)
-//   - Would use ARM NEON (128-bit vectors: 4×float32 or 2×float64)
-//   - Expected additional: 2-4x improvement
-//   - Expected performance: 50-200 GFLOPS
-//   - Requires Go assembly (*.s files)
-//   - Still stranded: GPU, ANE
 //
 // THE KEY INSIGHT: CACHE HIERARCHY
 //
@@ -109,27 +101,14 @@ import (
 //   https://www.agner.org/optimize/
 // ===========================================================================
 
-// MatMul Optimization Levels:
-// - Level 0: Naive triple loop (baseline)
-// - Level 1: Parallel (goroutines)
-// - Level 2: Cache-blocked (tiled)
-// - Level 3: SIMD vectorized (assembly)
-// - Level 3.5: Accelerate BLAS (Apple-optimized CPU)
-// - Level 4: Metal GPU
-// - Level 5: ANE
-
-// MatMulStrategy represents different matrix multiplication implementations.
-type MatMulStrategy int
-
-const (
-	StrategyNaive MatMulStrategy = iota
-	StrategyParallel
-	StrategyCacheBlocked
-	StrategySIMD
-	StrategyAccelerate  // Apple Accelerate framework (BLAS)
-	StrategyMetal
-	StrategyANE
-)
+// MatMul Optimization Levels (for reference and benchmarking):
+// - Level 0: Naive triple loop (baseline) - used by tensor.go
+// - Level 1: Parallel (goroutines) - optional optimization
+// - Level 2: Cache-blocked (tiled) - provided here for educational purposes
+//
+// The training code uses the naive implementation from tensor.go for simplicity
+// and determinism. These optimized versions demonstrate how performance can be
+// improved through cache awareness and parallelism.
 
 // MatMulCacheBlocked performs cache-optimized matrix multiplication.
 //
@@ -289,102 +268,24 @@ func MatMulCacheBlockedParallel(a, b *Tensor, blockSize int, cfg ComputeConfig) 
 	return out
 }
 
-// MatMulSIMD performs SIMD-vectorized matrix multiplication.
-//
-// ARM NEON (M4 Max):
-// - 128-bit SIMD registers (4x float32 or 2x float64)
-// - SVE (Scalable Vector Extension): up to 512-bit vectors (not used yet)
-// - Operations: FADD, FMUL, FMA (fused multiply-add)
-//
-// VECTORIZATION STRATEGY:
-// - Inner loop processes 2 float64 elements at a time
-// - Implemented in Go assembly (matmul_neon_arm64.s)
-// - Falls back to cache-blocked on non-ARM64 platforms
-//
-// PERFORMANCE:
-// - Expected: 2-4x over cache-blocked
-// - Best for medium matrices (128-512)
-// - On ARM64: Uses matmul_neon_arm64.s
-// - On other platforms: Falls back to cache-blocked
-//
-// This function is defined in matmul_simd.go (ARM64) or
-// matmul_simd_stub.go (other platforms).
-// The actual implementation is in matmul_neon_arm64.s for ARM64.
-
-// MatMulWithStrategy performs matrix multiplication using specified strategy.
-func MatMulWithStrategy(a, b *Tensor, strategy MatMulStrategy, cfg BackendConfig) *Tensor {
-	switch strategy {
-	case StrategyNaive:
-		return matmulSingleThreaded(a, b, NewTensor(a.shape[0], b.shape[1]),
-			a.shape[0], b.shape[1], a.shape[1])
-
-	case StrategyParallel:
-		return ParallelMatMul(a, b, cfg.ComputeConfig)
-
-	case StrategyCacheBlocked:
-		return MatMulCacheBlocked(a, b, 64)
-
-	case StrategySIMD:
-		return MatMulSIMD(a, b)
-
-	case StrategyAccelerate:
-		// Try Accelerate (Apple BLAS), fall back to cache-blocked
-		// Only available on macOS with darwin,cgo build tags
-		if accel, err := NewAccelerateBackend(); err == nil {
-			if result, err := accel.MatMul(a, b); err == nil {
-				return result
+// matmulSingleThreaded is a simple single-threaded matmul helper.
+func matmulSingleThreaded(a, b, out *Tensor, m, n, k int) *Tensor {
+	for i := 0; i < m; i++ {
+		for j := 0; j < n; j++ {
+			sum := 0.0
+			for kk := 0; kk < k; kk++ {
+				sum += a.At(i, kk) * b.At(kk, j)
 			}
+			out.Set(sum, i, j)
 		}
-		// Fallback if Accelerate fails or not available
-		return MatMulCacheBlocked(a, b, 64)
-
-	case StrategyMetal:
-		// Try Metal, fall back to Accelerate, then cache-blocked
-		if metal, err := NewMetalBackend(); err == nil {
-			if result, err := metal.MatMul(a, b); err == nil {
-				return result
-			}
-		}
-		// Try Accelerate as fallback
-		if accel, err := NewAccelerateBackend(); err == nil {
-			if result, err := accel.MatMul(a, b); err == nil {
-				return result
-			}
-		}
-		return MatMulCacheBlocked(a, b, 64)
-
-	case StrategyANE:
-		// Try ANE, fall back to Metal, Accelerate, then cache-blocked
-		if ane, err := NewANEBackend(); err == nil {
-			if result, err := ane.MatMul(a, b); err == nil {
-				return result
-			}
-		}
-		// Fall through to Metal
-		if metal, err := NewMetalBackend(); err == nil {
-			if result, err := metal.MatMul(a, b); err == nil {
-				return result
-			}
-		}
-		// Fall through to Accelerate
-		if accel, err := NewAccelerateBackend(); err == nil {
-			if result, err := accel.MatMul(a, b); err == nil {
-				return result
-			}
-		}
-		return MatMulCacheBlocked(a, b, 64)
-
-	default:
-		panic("unknown strategy")
 	}
+	return out
 }
 
-// OptimizationBenchmark compares all optimization levels.
-type OptimizationBenchmark struct {
-	Strategy MatMulStrategy
-	Name     string
-	TimeNs   int64
-	Speedup  float64
+// ParallelMatMul is a stub - not needed for training.
+// For parallel execution, see ../arm-benchmark/compute.go.
+func ParallelMatMul(a, b *Tensor, cfg ComputeConfig) *Tensor {
+	return MatMul(a, b) // Fall back to simple implementation
 }
 
 // Helper function
