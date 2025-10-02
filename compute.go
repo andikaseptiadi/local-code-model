@@ -34,9 +34,9 @@ type ComputeConfig struct {
 // Why single-threaded? Training with backpropagation requires careful
 // management of computational graphs and gradient flows. Single-threaded
 // execution ensures:
-//   1. Deterministic results (reproducible training runs)
-//   2. Easier debugging (no race conditions)
-//   3. Simpler implementation (no synchronization overhead)
+//  1. Deterministic results (reproducible training runs)
+//  2. Easier debugging (no race conditions)
+//  3. Simpler implementation (no synchronization overhead)
 //
 // For inference at scale, use parallel execution via ParallelMatMul.
 func DefaultComputeConfig() ComputeConfig {

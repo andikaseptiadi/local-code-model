@@ -56,4 +56,3 @@ func printUsage() {
 	fmt.Println("  go run . generate -model=model.bin -tokenizer=tok.bin -interactive")
 	fmt.Println()
 }
-

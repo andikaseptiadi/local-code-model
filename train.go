@@ -98,20 +98,20 @@ type TrainingConfig struct {
 	GradientClipValue float64 // Clip gradients to prevent explosion
 
 	// Training
-	BatchSize    int
-	NumEpochs    int
-	MaxSteps     int // Max training steps (overrides epochs if set)
+	BatchSize int
+	NumEpochs int
+	MaxSteps  int // Max training steps (overrides epochs if set)
 
 	// Learning rate schedule
-	WarmupSteps  int     // Linear warmup from 0 to LearningRate
-	DecaySteps   int     // Cosine decay after warmup
-	MinLR        float64 // Minimum learning rate
+	WarmupSteps int     // Linear warmup from 0 to LearningRate
+	DecaySteps  int     // Cosine decay after warmup
+	MinLR       float64 // Minimum learning rate
 
 	// Optimization algorithm
-	Optimizer    string // "sgd", "adam"
-	AdamBeta1    float64
-	AdamBeta2    float64
-	AdamEpsilon  float64
+	Optimizer   string // "sgd", "adam"
+	AdamBeta1   float64
+	AdamBeta2   float64
+	AdamEpsilon float64
 
 	// Logging
 	LogInterval  int // Log every N steps
@@ -130,9 +130,9 @@ func DefaultTrainingConfig() TrainingConfig {
 		GradientClipValue: 1.0,
 
 		// Training
-		BatchSize:  32,
-		NumEpochs:  10,
-		MaxSteps:   0, // Unlimited
+		BatchSize: 32,
+		NumEpochs: 10,
+		MaxSteps:  0, // Unlimited
 
 		// Learning rate schedule
 		WarmupSteps: 2000,
@@ -204,11 +204,12 @@ func (opt *SGDOptimizer) ZeroGrad(params []*Tensor) {
 //   - Bias correction (accounts for initialization at zero)
 //
 // Update rule:
-//   m_t = beta1 * m_{t-1} + (1 - beta1) * grad
-//   v_t = beta2 * v_{t-1} + (1 - beta2) * grad²
-//   m_hat = m_t / (1 - beta1^t)  // Bias correction
-//   v_hat = v_t / (1 - beta2^t)
-//   param -= lr * m_hat / (sqrt(v_hat) + epsilon)
+//
+//	m_t = beta1 * m_{t-1} + (1 - beta1) * grad
+//	v_t = beta2 * v_{t-1} + (1 - beta2) * grad²
+//	m_hat = m_t / (1 - beta1^t)  // Bias correction
+//	v_hat = v_t / (1 - beta2^t)
+//	param -= lr * m_hat / (sqrt(v_hat) + epsilon)
 type AdamOptimizer struct {
 	beta1       float64
 	beta2       float64
@@ -327,8 +328,9 @@ func (sched *LRScheduler) GetLR() float64 {
 //   - targets: (batch) - target token IDs
 //
 // Computes:
-//   loss = -log(softmax(logits)[target])
-//   averaged over batch
+//
+//	loss = -log(softmax(logits)[target])
+//	averaged over batch
 //
 // This is the standard loss for classification and language modeling.
 func CrossEntropyLoss(logits *Tensor, targets []int) float64 {

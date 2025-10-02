@@ -359,7 +359,7 @@ func GELU(x *Tensor) *Tensor {
 	out := NewTensor(x.shape...)
 
 	const (
-		sqrt2OverPi = 0.7978845608028654  // sqrt(2/π)
+		sqrt2OverPi = 0.7978845608028654 // sqrt(2/π)
 		coeff       = 0.044715
 	)
 

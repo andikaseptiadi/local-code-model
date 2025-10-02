@@ -105,7 +105,7 @@ type AttentionCache struct {
 
 // FFCache stores activations for feed-forward layer.
 type FFCache struct {
-	hidden     *Tensor // After first linear + activation
+	hidden        *Tensor // After first linear + activation
 	preActivation *Tensor // Before activation (needed for GELU gradient)
 }
 

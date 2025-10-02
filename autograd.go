@@ -58,9 +58,10 @@ import (
 //   - gradB = ∂L/∂B = A^T @ gradC
 //
 // Derivation:
-//   C[i,j] = Σ_k A[i,k] * B[k,j]
-//   ∂C[i,j]/∂A[i,k] = B[k,j]
-//   ∂L/∂A[i,k] = Σ_j ∂L/∂C[i,j] * B[k,j] = (gradC @ B^T)[i,k]
+//
+//	C[i,j] = Σ_k A[i,k] * B[k,j]
+//	∂C[i,j]/∂A[i,k] = B[k,j]
+//	∂L/∂A[i,k] = Σ_j ∂L/∂C[i,j] * B[k,j] = (gradC @ B^T)[i,k]
 func MatMulBackward(a, b, gradC *Tensor) (gradA, gradB *Tensor) {
 	// ∂L/∂A = gradC @ B^T
 	bT := Transpose(b)
@@ -84,9 +85,10 @@ func MatMulBackward(a, b, gradC *Tensor) (gradA, gradB *Tensor) {
 //   - gradB = ∂L/∂B = gradC
 //
 // Derivation:
-//   C[i] = A[i] + B[i]
-//   ∂C[i]/∂A[i] = 1
-//   ∂L/∂A[i] = ∂L/∂C[i] * 1 = gradC[i]
+//
+//	C[i] = A[i] + B[i]
+//	∂C[i]/∂A[i] = 1
+//	∂L/∂A[i] = ∂L/∂C[i] * 1 = gradC[i]
 func AddBackward(gradC *Tensor) (gradA, gradB *Tensor) {
 	// Addition distributes gradients equally to both inputs
 	return gradC.Clone(), gradC.Clone()
@@ -102,9 +104,10 @@ func AddBackward(gradC *Tensor) (gradA, gradB *Tensor) {
 //   - gradX = ∂L/∂X = scalar * gradY
 //
 // Derivation:
-//   Y[i] = scalar * X[i]
-//   ∂Y[i]/∂X[i] = scalar
-//   ∂L/∂X[i] = ∂L/∂Y[i] * scalar
+//
+//	Y[i] = scalar * X[i]
+//	∂Y[i]/∂X[i] = scalar
+//	∂L/∂X[i] = ∂L/∂Y[i] * scalar
 func ScaleBackward(scalar float64, gradY *Tensor) *Tensor {
 	return Scale(gradY, scalar)
 }
@@ -119,9 +122,10 @@ func ScaleBackward(scalar float64, gradY *Tensor) *Tensor {
 //   - gradX = ∂L/∂X = gradY * (X > 0)
 //
 // Derivation:
-//   Y[i] = max(0, X[i])
-//   ∂Y[i]/∂X[i] = 1 if X[i] > 0, else 0
-//   ∂L/∂X[i] = ∂L/∂Y[i] * indicator(X[i] > 0)
+//
+//	Y[i] = max(0, X[i])
+//	∂Y[i]/∂X[i] = 1 if X[i] > 0, else 0
+//	∂L/∂X[i] = ∂L/∂Y[i] * indicator(X[i] > 0)
 func ReLUBackward(x, gradY *Tensor) *Tensor {
 	gradX := NewTensor(x.shape...)
 
@@ -179,12 +183,14 @@ func GELUBackward(x, gradY *Tensor) *Tensor {
 //   - gradX = ∂L/∂X
 //
 // Derivation:
-//   Y[i] = exp(X[i]) / Σ_j exp(X[j])
-//   ∂Y[i]/∂X[j] = Y[i] * (δ[i,j] - Y[j])
-//   where δ[i,j] = 1 if i==j, else 0
+//
+//	Y[i] = exp(X[i]) / Σ_j exp(X[j])
+//	∂Y[i]/∂X[j] = Y[i] * (δ[i,j] - Y[j])
+//	where δ[i,j] = 1 if i==j, else 0
 //
 // Simplifies to:
-//   gradX[i] = Y[i] * (gradY[i] - Σ_j gradY[j] * Y[j])
+//
+//	gradX[i] = Y[i] * (gradY[i] - Σ_j gradY[j] * Y[j])
 func SoftmaxBackward(y, gradY *Tensor) *Tensor {
 	if len(y.shape) != 2 {
 		panic("SoftmaxBackward: requires 2D tensor")
@@ -286,7 +292,7 @@ func LayerNormBackward(x, y, gamma, beta, gradY *Tensor, epsilon float64) (gradX
 
 			// Gradient through variance and mean
 			// This is the standard batch norm gradient formula
-			gradX.Set((n*gradXNorm - sumGradY - xNorm*sumGradYXNorm) / (n * std), b, f)
+			gradX.Set((n*gradXNorm-sumGradY-xNorm*sumGradYXNorm)/(n*std), b, f)
 		}
 	}
 
@@ -304,8 +310,9 @@ func LayerNormBackward(x, y, gamma, beta, gradY *Tensor, epsilon float64) (gradX
 //   - gradLogits = ∂L/∂logits
 //
 // Derivation:
-//   For the target class: ∂L/∂logit[target] = softmax[target] - 1
-//   For other classes: ∂L/∂logit[i] = softmax[i]
+//
+//	For the target class: ∂L/∂logit[target] = softmax[target] - 1
+//	For other classes: ∂L/∂logit[i] = softmax[i]
 //
 // Simplified: gradLogits = softmax(logits) - one_hot(targets)
 func CrossEntropyBackward(logits *Tensor, targets []int) *Tensor {

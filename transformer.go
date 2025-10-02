@@ -112,9 +112,9 @@ func DefaultConfig() Config {
 // processing this token?"
 //
 // Mechanism:
-//   1. Project input to Query, Key, Value matrices
-//   2. Compute attention scores: softmax(Q·K^T / √d_k)
-//   3. Weight values by attention scores: Attention(Q,K,V) = softmax(QK^T/√d_k)V
+//  1. Project input to Query, Key, Value matrices
+//  2. Compute attention scores: softmax(Q·K^T / √d_k)
+//  3. Weight values by attention scores: Attention(Q,K,V) = softmax(QK^T/√d_k)V
 //
 // Multi-head: Run h parallel attention operations with different projections,
 // then concatenate. This allows attending to different representation subspaces.
@@ -130,7 +130,9 @@ type Attention struct {
 	mask *Tensor
 
 	// Backend for accelerated operations (optional)
-	backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }
+	backend interface {
+		MatMul(*Tensor, *Tensor) (*Tensor, error)
+	}
 }
 
 // NewAttention creates a new attention layer.
@@ -313,7 +315,8 @@ func (ln *LayerNorm) Forward(x *Tensor) *Tensor {
 // FeedForward implements the position-wise feed-forward network.
 //
 // This is a simple two-layer MLP applied independently to each position:
-//   FFN(x) = GELU(x @ W1 + b1) @ W2 + b2
+//
+//	FFN(x) = GELU(x @ W1 + b1) @ W2 + b2
 //
 // The hidden dimension is typically 4x the embedding dimension.
 // This is where most of the model's parameters reside.
@@ -322,7 +325,9 @@ type FeedForward struct {
 	w2, b2 *Tensor
 
 	// Backend for accelerated operations (optional)
-	backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }
+	backend interface {
+		MatMul(*Tensor, *Tensor) (*Tensor, error)
+	}
 }
 
 // NewFeedForward creates a feed-forward layer.
@@ -364,8 +369,9 @@ func (ff *FeedForward) Forward(x *Tensor) *Tensor {
 // TransformerBlock combines attention, layer norm, and feed-forward layers.
 //
 // Architecture (GPT-style, pre-norm):
-//   x = x + Attention(LayerNorm(x))
-//   x = x + FeedForward(LayerNorm(x))
+//
+//	x = x + Attention(LayerNorm(x))
+//	x = x + FeedForward(LayerNorm(x))
 //
 // The residual connections (x + ...) are crucial for training deep networks.
 type TransformerBlock struct {
@@ -404,10 +410,10 @@ func (tb *TransformerBlock) Forward(x *Tensor) *Tensor {
 // GPT implements a GPT-style transformer language model.
 //
 // Architecture:
-//   1. Token + positional embeddings
-//   2. Stack of transformer blocks
-//   3. Final layer norm
-//   4. Linear projection to vocabulary logits
+//  1. Token + positional embeddings
+//  2. Stack of transformer blocks
+//  3. Final layer norm
+//  4. Linear projection to vocabulary logits
 type GPT struct {
 	config Config
 
@@ -424,11 +430,15 @@ type GPT struct {
 
 	// Backend for accelerated matrix operations
 	// If nil, uses naive MatMul from tensor.go
-	backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }
+	backend interface {
+		MatMul(*Tensor, *Tensor) (*Tensor, error)
+	}
 }
 
 // SetBackend configures the backend for accelerated matrix operations
-func (g *GPT) SetBackend(backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }) {
+func (g *GPT) SetBackend(backend interface {
+	MatMul(*Tensor, *Tensor) (*Tensor, error)
+}) {
 	g.backend = backend
 
 	// Propagate to all transformer blocks
