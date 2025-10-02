@@ -280,7 +280,7 @@ func buildCharTokenizer(text string) *Tokenizer {
 		vocab = append(vocab, string(ch))
 	}
 
-	tokenizer := &Tokenizer{}
+	tokenizer := NewTokenizer()
 	if err := tokenizer.Train([]string{text}, len(vocab)); err != nil {
 		panic(err)
 	}
