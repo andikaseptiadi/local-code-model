@@ -1,8 +1,14 @@
 package main
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"math/rand"
+	"os"
+	"sort"
 )
 
 // ===========================================================================
@@ -122,6 +128,9 @@ type Attention struct {
 
 	// Causal mask for autoregressive generation
 	mask *Tensor
+
+	// Backend for accelerated operations (optional)
+	backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }
 }
 
 // NewAttention creates a new attention layer.
@@ -181,14 +190,25 @@ func (a *Attention) Forward(x *Tensor) *Tensor {
 
 	seqLen := x.shape[0]
 
+	// Helper to use backend if available
+	matmul := func(t1, t2 *Tensor) *Tensor {
+		if a.backend != nil {
+			result, err := a.backend.MatMul(t1, t2)
+			if err == nil {
+				return result
+			}
+		}
+		return MatMul(t1, t2)
+	}
+
 	// Project to Q, K, V
-	q := MatMul(x, a.wq) // (seqLen, embedDim)
-	k := MatMul(x, a.wk)
-	v := MatMul(x, a.wv)
+	q := matmul(x, a.wq) // (seqLen, embedDim)
+	k := matmul(x, a.wk)
+	v := matmul(x, a.wv)
 
 	// Compute attention scores: Q @ K^T / sqrt(d_k)
 	kt := Transpose(k)
-	scores := MatMul(q, kt) // (seqLen, seqLen)
+	scores := matmul(q, kt) // (seqLen, seqLen)
 
 	// Scale for numerical stability
 	scale := 1.0 / math.Sqrt(float64(a.embedDim))
@@ -207,10 +227,10 @@ func (a *Attention) Forward(x *Tensor) *Tensor {
 	weights := Softmax(scores) // (seqLen, seqLen)
 
 	// Apply attention to values
-	output := MatMul(weights, v) // (seqLen, embedDim)
+	output := matmul(weights, v) // (seqLen, embedDim)
 
 	// Final projection
-	output = MatMul(output, a.wo)
+	output = matmul(output, a.wo)
 
 	return output
 }
@@ -300,6 +320,9 @@ func (ln *LayerNorm) Forward(x *Tensor) *Tensor {
 type FeedForward struct {
 	w1, b1 *Tensor
 	w2, b2 *Tensor
+
+	// Backend for accelerated operations (optional)
+	backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }
 }
 
 // NewFeedForward creates a feed-forward layer.
@@ -315,13 +338,24 @@ func NewFeedForward(embedDim, hiddenDim int) *FeedForward {
 // Forward applies the feed-forward network.
 // x shape: (seqLen, embedDim)
 func (ff *FeedForward) Forward(x *Tensor) *Tensor {
+	// Helper to use backend if available
+	matmul := func(t1, t2 *Tensor) *Tensor {
+		if ff.backend != nil {
+			result, err := ff.backend.MatMul(t1, t2)
+			if err == nil {
+				return result
+			}
+		}
+		return MatMul(t1, t2)
+	}
+
 	// First layer with GELU activation
-	hidden := MatMul(x, ff.w1)
+	hidden := matmul(x, ff.w1)
 	hidden = addBias(hidden, ff.b1)
 	hidden = GELU(hidden)
 
 	// Second layer
-	output := MatMul(hidden, ff.w2)
+	output := matmul(hidden, ff.w2)
 	output = addBias(output, ff.b2)
 
 	return output
@@ -387,6 +421,32 @@ type GPT struct {
 	// Output
 	lnFinal *LayerNorm
 	lmHead  *Tensor // (embedDim, vocabSize) - language model head
+
+	// Backend for accelerated matrix operations
+	// If nil, uses naive MatMul from tensor.go
+	backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }
+}
+
+// SetBackend configures the backend for accelerated matrix operations
+func (g *GPT) SetBackend(backend interface{ MatMul(*Tensor, *Tensor) (*Tensor, error) }) {
+	g.backend = backend
+
+	// Propagate to all transformer blocks
+	for _, block := range g.blocks {
+		block.attn.backend = backend
+		block.ff.backend = backend
+	}
+}
+
+// matmul performs matrix multiplication using backend if available, otherwise falls back to naive
+func (g *GPT) matmul(a, b *Tensor) *Tensor {
+	if g.backend != nil {
+		result, err := g.backend.MatMul(a, b)
+		if err == nil {
+			return result
+		}
+	}
+	return MatMul(a, b)
 }
 
 // NewGPT creates a new GPT model.
@@ -456,7 +516,7 @@ func (g *GPT) Forward(inputIDs []int) *Tensor {
 	x = g.lnFinal.Forward(x)
 
 	// Project to vocabulary logits
-	logits := MatMul(x, g.lmHead)
+	logits := g.matmul(x, g.lmHead)
 
 	return logits
 }
@@ -466,6 +526,15 @@ func (g *GPT) Forward(inputIDs []int) *Tensor {
 // maxTokens: maximum number of new tokens to generate
 // Returns: generated token IDs (including prompt)
 func (g *GPT) Generate(prompt []int, maxTokens int) []int {
+	return g.GenerateWithSampling(prompt, maxTokens, &SampleConfig{Temperature: 0.0})
+}
+
+// GenerateWithSampling produces tokens autoregressively with customizable sampling.
+// prompt: initial token IDs
+// maxTokens: maximum number of new tokens to generate
+// config: sampling configuration (temperature, top-k, top-p)
+// Returns: generated token IDs (including prompt)
+func (g *GPT) GenerateWithSampling(prompt []int, maxTokens int, config *SampleConfig) []int {
 	tokens := make([]int, len(prompt))
 	copy(tokens, prompt)
 
@@ -475,13 +544,13 @@ func (g *GPT) Generate(prompt []int, maxTokens int) []int {
 
 		// Get logits for last position
 		lastPos := len(tokens) - 1
-		lastLogits := NewTensor(g.config.VocabSize)
+		lastLogits := make([]float64, g.config.VocabSize)
 		for j := 0; j < g.config.VocabSize; j++ {
-			lastLogits.data[j] = logits.At(lastPos, j)
+			lastLogits[j] = logits.At(lastPos, j)
 		}
 
-		// Sample next token (greedy for now - take argmax)
-		nextToken := argmax(lastLogits.data)
+		// Sample next token using configured sampling strategy
+		nextToken := sample(lastLogits, config)
 
 		// Append to sequence
 		tokens = append(tokens, nextToken)
@@ -541,4 +610,404 @@ func argmax(data []float64) int {
 	}
 
 	return maxIdx
+}
+
+// SampleConfig holds configuration for text generation sampling.
+type SampleConfig struct {
+	Temperature float64 // Temperature for sampling (0 = greedy, higher = more random)
+	TopK        int     // Top-k sampling (0 = disabled)
+	TopP        float64 // Top-p (nucleus) sampling (0 = disabled)
+}
+
+// NewSampleConfig creates a default sampling configuration.
+func NewSampleConfig() *SampleConfig {
+	return &SampleConfig{
+		Temperature: 1.0,
+		TopK:        0,
+		TopP:        0.0,
+	}
+}
+
+// sample samples from logits using temperature, top-k, and top-p sampling.
+func sample(logits []float64, config *SampleConfig) int {
+	// Greedy decoding if temperature is 0
+	if config.Temperature == 0.0 {
+		return argmax(logits)
+	}
+
+	// Apply temperature
+	scaledLogits := make([]float64, len(logits))
+	for i, logit := range logits {
+		scaledLogits[i] = logit / config.Temperature
+	}
+
+	// Convert logits to probabilities using softmax
+	probs := softmaxSlice(scaledLogits)
+
+	// Apply top-k filtering if enabled
+	if config.TopK > 0 {
+		probs = applyTopK(probs, config.TopK)
+	}
+
+	// Apply top-p (nucleus) filtering if enabled
+	if config.TopP > 0.0 && config.TopP < 1.0 {
+		probs = applyTopP(probs, config.TopP)
+	}
+
+	// Sample from the distribution
+	return sampleFromDistribution(probs)
+}
+
+// softmaxSlice applies softmax to a slice of logits.
+func softmaxSlice(logits []float64) []float64 {
+	// Find max for numerical stability
+	maxLogit := logits[0]
+	for _, logit := range logits {
+		if logit > maxLogit {
+			maxLogit = logit
+		}
+	}
+
+	// Compute exp and sum
+	expSum := 0.0
+	probs := make([]float64, len(logits))
+	for i, logit := range logits {
+		probs[i] = math.Exp(logit - maxLogit)
+		expSum += probs[i]
+	}
+
+	// Normalize
+	for i := range probs {
+		probs[i] /= expSum
+	}
+
+	return probs
+}
+
+// applyTopK filters probabilities to keep only top-k tokens.
+func applyTopK(probs []float64, k int) []float64 {
+	if k <= 0 || k >= len(probs) {
+		return probs
+	}
+
+	// Create indices sorted by probability
+	type indexedProb struct {
+		index int
+		prob  float64
+	}
+
+	indexed := make([]indexedProb, len(probs))
+	for i, p := range probs {
+		indexed[i] = indexedProb{i, p}
+	}
+
+	// Sort by probability descending
+	sort.Slice(indexed, func(i, j int) bool {
+		return indexed[i].prob > indexed[j].prob
+	})
+
+	// Zero out probabilities outside top-k
+	filtered := make([]float64, len(probs))
+	totalProb := 0.0
+	for i := 0; i < k && i < len(indexed); i++ {
+		filtered[indexed[i].index] = indexed[i].prob
+		totalProb += indexed[i].prob
+	}
+
+	// Renormalize
+	if totalProb > 0 {
+		for i := range filtered {
+			filtered[i] /= totalProb
+		}
+	}
+
+	return filtered
+}
+
+// applyTopP filters probabilities using nucleus sampling.
+func applyTopP(probs []float64, p float64) []float64 {
+	if p <= 0.0 || p >= 1.0 {
+		return probs
+	}
+
+	// Create indices sorted by probability
+	type indexedProb struct {
+		index int
+		prob  float64
+	}
+
+	indexed := make([]indexedProb, len(probs))
+	for i, prob := range probs {
+		indexed[i] = indexedProb{i, prob}
+	}
+
+	// Sort by probability descending
+	sort.Slice(indexed, func(i, j int) bool {
+		return indexed[i].prob > indexed[j].prob
+	})
+
+	// Find nucleus (minimum set with cumulative prob >= p)
+	filtered := make([]float64, len(probs))
+	cumProb := 0.0
+	totalProb := 0.0
+
+	for _, item := range indexed {
+		if cumProb >= p {
+			break
+		}
+		filtered[item.index] = item.prob
+		cumProb += item.prob
+		totalProb += item.prob
+	}
+
+	// Renormalize
+	if totalProb > 0 {
+		for i := range filtered {
+			filtered[i] /= totalProb
+		}
+	}
+
+	return filtered
+}
+
+// sampleFromDistribution samples an index from a probability distribution.
+func sampleFromDistribution(probs []float64) int {
+	// Generate random number in [0, 1)
+	r := rand.Float64()
+
+	// Sample using cumulative distribution
+	cumProb := 0.0
+	for i, prob := range probs {
+		cumProb += prob
+		if r < cumProb {
+			return i
+		}
+	}
+
+	// Fallback to last index (shouldn't happen with valid probs)
+	return len(probs) - 1
+}
+
+// ===========================================================================
+// Model Serialization
+// ===========================================================================
+//
+// Simple binary format for saving/loading GPT models.
+//
+// Format:
+//   1. Header with config (JSON)
+//   2. All tensor data in order (binary float64)
+//
+// This is a naive format - just tensor dumps. Production systems would use:
+//   - SafeTensors (memory-mapped format from HuggingFace)
+//   - GGUF (llama.cpp format with quantization)
+//   - PyTorch .pt files
+//
+// But for learning purposes, a simple format is clearest.
+// ===========================================================================
+
+// Save writes the model to a file.
+func (g *GPT) Save(filename string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer f.Close()
+
+	// Write config as JSON header
+	configJSON, err := json.Marshal(g.config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write header length (4 bytes)
+	headerLen := uint32(len(configJSON))
+	if err := binary.Write(f, binary.LittleEndian, headerLen); err != nil {
+		return fmt.Errorf("failed to write header length: %w", err)
+	}
+
+	// Write JSON config
+	if _, err := f.Write(configJSON); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	// Helper to write tensor data
+	writeTensor := func(t *Tensor) error {
+		return binary.Write(f, binary.LittleEndian, t.data)
+	}
+
+	// Write embeddings
+	if err := writeTensor(g.tokenEmbed); err != nil {
+		return fmt.Errorf("failed to write token embeddings: %w", err)
+	}
+	if err := writeTensor(g.posEmbed); err != nil {
+		return fmt.Errorf("failed to write position embeddings: %w", err)
+	}
+
+	// Write each transformer block
+	for i, block := range g.blocks {
+		// Attention weights
+		if err := writeTensor(block.attn.wq); err != nil {
+			return fmt.Errorf("failed to write block %d wq: %w", i, err)
+		}
+		if err := writeTensor(block.attn.wk); err != nil {
+			return fmt.Errorf("failed to write block %d wk: %w", i, err)
+		}
+		if err := writeTensor(block.attn.wv); err != nil {
+			return fmt.Errorf("failed to write block %d wv: %w", i, err)
+		}
+		if err := writeTensor(block.attn.wo); err != nil {
+			return fmt.Errorf("failed to write block %d wo: %w", i, err)
+		}
+
+		// LayerNorm 1
+		if err := writeTensor(block.ln1.gamma); err != nil {
+			return fmt.Errorf("failed to write block %d ln1 gamma: %w", i, err)
+		}
+		if err := writeTensor(block.ln1.beta); err != nil {
+			return fmt.Errorf("failed to write block %d ln1 beta: %w", i, err)
+		}
+
+		// Feed-forward weights
+		if err := writeTensor(block.ff.w1); err != nil {
+			return fmt.Errorf("failed to write block %d ff w1: %w", i, err)
+		}
+		if err := writeTensor(block.ff.b1); err != nil {
+			return fmt.Errorf("failed to write block %d ff b1: %w", i, err)
+		}
+		if err := writeTensor(block.ff.w2); err != nil {
+			return fmt.Errorf("failed to write block %d ff w2: %w", i, err)
+		}
+		if err := writeTensor(block.ff.b2); err != nil {
+			return fmt.Errorf("failed to write block %d ff b2: %w", i, err)
+		}
+
+		// LayerNorm 2
+		if err := writeTensor(block.ln2.gamma); err != nil {
+			return fmt.Errorf("failed to write block %d ln2 gamma: %w", i, err)
+		}
+		if err := writeTensor(block.ln2.beta); err != nil {
+			return fmt.Errorf("failed to write block %d ln2 beta: %w", i, err)
+		}
+	}
+
+	// Write final layer norm
+	if err := writeTensor(g.lnFinal.gamma); err != nil {
+		return fmt.Errorf("failed to write final ln gamma: %w", err)
+	}
+	if err := writeTensor(g.lnFinal.beta); err != nil {
+		return fmt.Errorf("failed to write final ln beta: %w", err)
+	}
+
+	// Write language model head
+	if err := writeTensor(g.lmHead); err != nil {
+		return fmt.Errorf("failed to write lm head: %w", err)
+	}
+
+	return nil
+}
+
+// Load reads a model from a file.
+func LoadGPT(filename string) (*GPT, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer f.Close()
+
+	// Read header length
+	var headerLen uint32
+	if err := binary.Read(f, binary.LittleEndian, &headerLen); err != nil {
+		return nil, fmt.Errorf("failed to read header length: %w", err)
+	}
+
+	// Read config JSON
+	configJSON := make([]byte, headerLen)
+	if _, err := io.ReadFull(f, configJSON); err != nil {
+		return nil, fmt.Errorf("failed to read config: %w", err)
+	}
+
+	// Parse config
+	var config Config
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// Create model with config
+	model := NewGPT(config)
+
+	// Helper to read tensor data
+	readTensor := func(t *Tensor) error {
+		return binary.Read(f, binary.LittleEndian, t.data)
+	}
+
+	// Read embeddings
+	if err := readTensor(model.tokenEmbed); err != nil {
+		return nil, fmt.Errorf("failed to read token embeddings: %w", err)
+	}
+	if err := readTensor(model.posEmbed); err != nil {
+		return nil, fmt.Errorf("failed to read position embeddings: %w", err)
+	}
+
+	// Read each transformer block
+	for i, block := range model.blocks {
+		// Attention weights
+		if err := readTensor(block.attn.wq); err != nil {
+			return nil, fmt.Errorf("failed to read block %d wq: %w", i, err)
+		}
+		if err := readTensor(block.attn.wk); err != nil {
+			return nil, fmt.Errorf("failed to read block %d wk: %w", i, err)
+		}
+		if err := readTensor(block.attn.wv); err != nil {
+			return nil, fmt.Errorf("failed to read block %d wv: %w", i, err)
+		}
+		if err := readTensor(block.attn.wo); err != nil {
+			return nil, fmt.Errorf("failed to read block %d wo: %w", i, err)
+		}
+
+		// LayerNorm 1
+		if err := readTensor(block.ln1.gamma); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ln1 gamma: %w", i, err)
+		}
+		if err := readTensor(block.ln1.beta); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ln1 beta: %w", i, err)
+		}
+
+		// Feed-forward weights
+		if err := readTensor(block.ff.w1); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ff w1: %w", i, err)
+		}
+		if err := readTensor(block.ff.b1); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ff b1: %w", i, err)
+		}
+		if err := readTensor(block.ff.w2); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ff w2: %w", i, err)
+		}
+		if err := readTensor(block.ff.b2); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ff b2: %w", i, err)
+		}
+
+		// LayerNorm 2
+		if err := readTensor(block.ln2.gamma); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ln2 gamma: %w", i, err)
+		}
+		if err := readTensor(block.ln2.beta); err != nil {
+			return nil, fmt.Errorf("failed to read block %d ln2 beta: %w", i, err)
+		}
+	}
+
+	// Read final layer norm
+	if err := readTensor(model.lnFinal.gamma); err != nil {
+		return nil, fmt.Errorf("failed to read final ln gamma: %w", err)
+	}
+	if err := readTensor(model.lnFinal.beta); err != nil {
+		return nil, fmt.Errorf("failed to read final ln beta: %w", err)
+	}
+
+	// Read language model head
+	if err := readTensor(model.lmHead); err != nil {
+		return nil, fmt.Errorf("failed to read lm head: %w", err)
+	}
+
+	return model, nil
 }
