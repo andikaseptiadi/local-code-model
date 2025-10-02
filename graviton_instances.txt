@@ -1,3 +1,0 @@
-i-088bf3dc650613dd0|graviton2-benchmark|34.208.119.62
-i-0d0326a65f70f4b0d|graviton2-test|35.87.25.121
-i-0b979e653f5841ffb|graviton3-test|54.202.151.169

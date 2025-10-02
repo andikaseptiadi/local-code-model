@@ -5,8 +5,8 @@ package main
 /*
 // Try to enable SVE if supported, but don't fail if not
 // The C code has fallback for non-SVE
-#cgo CFLAGS: -O3 -march=native
-#cgo LDFLAGS: -lm
+#cgo CFLAGS: -O3 -march=native -fopenmp
+#cgo LDFLAGS: -lm -lgomp
 
 #include <stdint.h>
 
@@ -14,6 +14,10 @@ package main
 void matmul_sve_c(double* c, const double* a, const double* b, int64_t m, int64_t n, int64_t k);
 void matmul_sve_optimized(double* c, const double* a, const double* b, int64_t m, int64_t n, int64_t k);
 int64_t sve_vector_length(void);
+
+// Forward declarations from matmul_sve_multiengine.c
+void matmul_sve_multiengine(double* c, const double* a, const double* b, int64_t m, int64_t n, int64_t k);
+void matmul_sve_multiengine_pinned(double* c, const double* a, const double* b, int64_t m, int64_t n, int64_t k);
 */
 import "C"
 import (
@@ -111,6 +115,80 @@ func (s *SVEBackend) VectorLength() int {
 // HasSVE2 returns whether SVE2 is available
 func (s *SVEBackend) HasSVE2() bool {
 	return s.hasSVE2
+}
+
+// MatMulMultiEngine performs matrix multiplication using multi-engine optimized SVE
+func (s *SVEBackend) MatMulMultiEngine(a, b *Tensor) (*Tensor, error) {
+	if !s.available {
+		return nil, fmt.Errorf("SVE not available")
+	}
+
+	// Validate dimensions
+	if len(a.shape) != 2 || len(b.shape) != 2 {
+		return nil, fmt.Errorf("SVE MatMul requires 2D tensors")
+	}
+
+	m, k1 := a.shape[0], a.shape[1]
+	k2, n := b.shape[0], b.shape[1]
+
+	if k1 != k2 {
+		return nil, fmt.Errorf("SVE MatMul: incompatible dimensions: A is %dx%d, B is %dx%d",
+			m, k1, k2, n)
+	}
+
+	k := k1
+
+	// Create result tensor
+	result := NewTensor(m, n)
+
+	// Call multi-engine optimized implementation
+	C.matmul_sve_multiengine(
+		(*C.double)(unsafe.Pointer(&result.data[0])),
+		(*C.double)(unsafe.Pointer(&a.data[0])),
+		(*C.double)(unsafe.Pointer(&b.data[0])),
+		C.int64_t(m),
+		C.int64_t(n),
+		C.int64_t(k),
+	)
+
+	return result, nil
+}
+
+// MatMulMultiEnginePinned performs matrix multiplication using pinned multi-engine SVE
+func (s *SVEBackend) MatMulMultiEnginePinned(a, b *Tensor) (*Tensor, error) {
+	if !s.available {
+		return nil, fmt.Errorf("SVE not available")
+	}
+
+	// Validate dimensions
+	if len(a.shape) != 2 || len(b.shape) != 2 {
+		return nil, fmt.Errorf("SVE MatMul requires 2D tensors")
+	}
+
+	m, k1 := a.shape[0], a.shape[1]
+	k2, n := b.shape[0], b.shape[1]
+
+	if k1 != k2 {
+		return nil, fmt.Errorf("SVE MatMul: incompatible dimensions: A is %dx%d, B is %dx%d",
+			m, k1, k2, n)
+	}
+
+	k := k1
+
+	// Create result tensor
+	result := NewTensor(m, n)
+
+	// Call pinned multi-engine implementation
+	C.matmul_sve_multiengine_pinned(
+		(*C.double)(unsafe.Pointer(&result.data[0])),
+		(*C.double)(unsafe.Pointer(&a.data[0])),
+		(*C.double)(unsafe.Pointer(&b.data[0])),
+		C.int64_t(m),
+		C.int64_t(n),
+		C.int64_t(k),
+	)
+
+	return result, nil
 }
 
 // Close cleans up SVE backend resources

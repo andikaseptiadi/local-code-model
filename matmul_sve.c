@@ -38,12 +38,10 @@ void matmul_sve_c(double* restrict c, const double* restrict a,
                 // Load vector from A[i][l:l+vl]
                 svfloat64_t a_vec = svld1_f64(pg, &a[i * k + l]);
 
-                // Load vector from B[l:l+vl][j]
-                // This requires strided load (stride = n)
-                svfloat64_t b_vec = svdup_n_f64(0.0);
-                for (int64_t vl_idx = 0; vl_idx < vl; vl_idx++) {
-                    b_vec = svdup_n_f64_lane(b_vec, vl_idx, b[(l + vl_idx) * n + j]);
-                }
+                // Load vector from B[l:l+vl][j] using strided load
+                // B values are at: b[(l+0)*n+j], b[(l+1)*n+j], ..., b[(l+vl-1)*n+j]
+                // This is a strided load with stride = n * sizeof(double)
+                svfloat64_t b_vec = svld1_vnum_f64(pg, &b[l * n + j], (int64_t)n);
 
                 // Fused multiply-add: sum_vec += a_vec * b_vec
                 sum_vec = svmla_f64_m(pg, sum_vec, a_vec, b_vec);
