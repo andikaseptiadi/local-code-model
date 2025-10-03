@@ -133,6 +133,9 @@ This codebase is designed to be read like a textbook. See **[LEARNING.md](LEARNI
 5. `train.go` - Training loop implementation
 6. `cmd_train.go` - End-to-end training example
 
+**Deep dive tutorials:**
+- **[Understanding the Attention Mechanism](docs/attention-mechanism.md)** - A comprehensive guide to how attention works, with intuition, mathematics, and practical examples
+
 **Time to understand:**
 - Quick overview: 2-3 hours
 - Deep understanding: 1-2 days
