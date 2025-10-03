@@ -103,6 +103,7 @@ func RunTrainCommand(args []string) error {
 	modelPath := fs.String("model", "tiny_model.bin", "Output model path")
 	tokenizerPath := fs.String("tokenizer", "tiny_tokenizer.bin", "Output tokenizer path")
 	metricsPath := fs.String("metrics", "", "Optional path to save training metrics visualization (HTML file)")
+	tokenizerType := fs.String("tokenizer-type", "char", "Tokenizer type: 'char' (character-level, simple) or 'bpe' (Byte-Pair Encoding, more efficient)")
 
 	// Validation
 	genSamples := fs.Int("gen-samples", 3, "Number of samples to generate after training")
@@ -119,6 +120,7 @@ func RunTrainCommand(args []string) error {
 	fmt.Printf("Model: %d layers, %d embed dim, %d heads, %d seq len\n",
 		*numLayers, *embedDim, *numHeads, *seqLen)
 	fmt.Printf("Training: %d epochs, batch size %d, lr %.4f\n", *epochs, *batchSize, *lr)
+	fmt.Printf("Tokenizer: %s\n", *tokenizerType)
 	fmt.Println()
 
 	// Step 1: Load training data
@@ -130,10 +132,19 @@ func RunTrainCommand(args []string) error {
 	fmt.Printf("  Loaded %d characters from .go files\n", len(text))
 	fmt.Println()
 
-	// Step 2: Build character-level tokenizer
-	fmt.Println("Step 2: Building character-level tokenizer")
-	tokenizer := buildCharTokenizer(text)
-	fmt.Printf("  Vocabulary size: %d characters\n", tokenizer.VocabSize())
+	// Step 2: Build tokenizer
+	fmt.Printf("Step 2: Building %s tokenizer\n", *tokenizerType)
+	var tokenizer TokenizerInterface
+	var err2 error
+	if *tokenizerType == "bpe" {
+		tokenizer, err2 = buildBPETokenizer(text, 512) // Reasonable vocab size for BPE
+	} else {
+		tokenizer, err2 = buildCharTokenizer(text)
+	}
+	if err2 != nil {
+		return fmt.Errorf("failed to build tokenizer: %v", err2)
+	}
+	fmt.Printf("  Vocabulary size: %d tokens\n", tokenizer.VocabSize())
 	fmt.Println()
 
 	// Step 3: Create training dataset
@@ -291,28 +302,19 @@ func loadGoFiles(dir string) (string, error) {
 }
 
 // buildCharTokenizer creates a character-level tokenizer from text.
-//
-// Why character-level? Simplest possible tokenization. BPE would be better
-// for real use, but char-level is enough for this demo.
-func buildCharTokenizer(text string) *Tokenizer {
-	// Collect unique characters
-	charSet := make(map[rune]bool)
-	for _, ch := range text {
-		charSet[ch] = true
-	}
+func buildCharTokenizer(text string) (TokenizerInterface, error) {
+	st := NewSimpleTokenizer()
+	st.BuildVocab([]string{text})
+	return st, nil
+}
 
-	// Build vocab
-	vocab := make([]string, 0, len(charSet))
-	for ch := range charSet {
-		vocab = append(vocab, string(ch))
-	}
-
+// buildBPETokenizer creates a BPE tokenizer from text.
+func buildBPETokenizer(text string, vocabSize int) (TokenizerInterface, error) {
 	tokenizer := NewTokenizer()
-	if err := tokenizer.Train([]string{text}, len(vocab)); err != nil {
-		panic(err)
+	if err := tokenizer.Train([]string{text}, vocabSize); err != nil {
+		return nil, err
 	}
-
-	return tokenizer
+	return tokenizer, nil
 }
 
 // createDataset splits text into training examples.
@@ -322,7 +324,7 @@ func buildCharTokenizer(text string) *Tokenizer {
 //
 // Design note: No shuffling, no validation set, no data augmentation.
 // This is intentionally minimal.
-func createDataset(text string, tokenizer *Tokenizer, seqLen int, batchSize int) [][][]int {
+func createDataset(text string, tokenizer TokenizerInterface, seqLen int, batchSize int) [][][]int {
 	// Tokenize entire text
 	tokens := tokenizer.Encode(text)
 
@@ -365,7 +367,7 @@ func countParameters(params []*Tensor) int {
 //
 // This is a simple greedy generation for validation purposes.
 // For real inference, use cmd_generate.go with proper sampling.
-func generateSample(model *GPT, tokenizer *Tokenizer, prompt string, maxLen int) string {
+func generateSample(model *GPT, tokenizer TokenizerInterface, prompt string, maxLen int) string {
 	tokens := tokenizer.Encode(prompt)
 
 	for i := 0; i < maxLen; i++ {

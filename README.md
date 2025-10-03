@@ -110,6 +110,31 @@ This creates a self-contained HTML file with:
 
 The visualization opens in any browser with no external dependencies. Perfect for monitoring training runs, comparing hyperparameters, and understanding training dynamics.
 
+### Tokenizer Options
+
+This project supports two tokenizer types:
+
+**Character-level (`-tokenizer-type char`)** (default):
+- Simple: Each unique character becomes a token
+- Small vocabulary (~100-200 tokens for typical code)
+- Good for learning and experimentation
+- Fast training on small datasets
+
+**Byte-Pair Encoding (`-tokenizer-type bpe`)**:
+- More efficient: Learns subword units from data
+- Larger vocabulary (configurable, default 512 tokens)
+- Better for real-world training
+- Handles rare words through composition
+
+Example:
+```bash
+# Character-level (default, simple)
+./local-code-model train -tokenizer-type char
+
+# BPE (more efficient)
+./local-code-model train -tokenizer-type bpe
+```
+
 ### Options
 
 ```bash
@@ -125,6 +150,7 @@ The visualization opens in any browser with no external dependencies. Perfect fo
   -data . \             # Directory with .go files
   -model model.bin \    # Output model path
   -tokenizer tok.bin \  # Output tokenizer path
+  -tokenizer-type char \  # Tokenizer type: 'char' (default) or 'bpe'
   -metrics metrics.html # Optional: Save training metrics visualization
 
 # Generation

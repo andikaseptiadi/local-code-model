@@ -21,6 +21,16 @@ import (
 //   Kudo, Richardson (2018)
 //   https://arxiv.org/abs/1808.06226
 
+// TokenizerInterface defines the common interface for all tokenizers.
+// This allows both BPE and character-level tokenizers to be used interchangeably.
+type TokenizerInterface interface {
+	Encode(text string) []int
+	Decode(ids []int) string
+	VocabSize() int
+	Save(filename string) error
+	Load(filename string) error
+}
+
 // Tokenizer implements Byte-Pair Encoding (BPE) for text tokenization.
 //
 // BPE is a data compression algorithm adapted for NLP:
@@ -439,4 +449,103 @@ func (st *SimpleTokenizer) Decode(ids []int) string {
 // VocabSize returns vocabulary size.
 func (st *SimpleTokenizer) VocabSize() int {
 	return len(st.charToID)
+}
+
+// Save writes the simple tokenizer to a file.
+func (st *SimpleTokenizer) Save(filename string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("simpletokenizer: failed to create file: %w", err)
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+	defer w.Flush()
+
+	// Write header
+	if _, err = fmt.Fprintf(w, "SIMPLE_TOKENIZER\n"); err != nil {
+		return fmt.Errorf("simpletokenizer: failed to write header: %w", err)
+	}
+
+	// Write vocabulary (sorted by ID for deterministic output)
+	type entry struct {
+		char rune
+		id   int
+	}
+	entries := make([]entry, 0, len(st.charToID))
+	for char, id := range st.charToID {
+		entries = append(entries, entry{char, id})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].id < entries[j].id
+	})
+
+	for _, e := range entries {
+		if _, err = fmt.Fprintf(w, "%d\\t%s\n", e.id, hex.EncodeToString([]byte(string(e.char)))); err != nil {
+			return fmt.Errorf("simpletokenizer: failed to write entry: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// Load reads a simple tokenizer from a file.
+func (st *SimpleTokenizer) Load(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("simpletokenizer: failed to open file: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+
+	// Read header
+	if !scanner.Scan() {
+		return fmt.Errorf("simpletokenizer: empty file")
+	}
+	if scanner.Text() != "SIMPLE_TOKENIZER" {
+		return fmt.Errorf("simpletokenizer: invalid header")
+	}
+
+	// Reset state
+	st.charToID = make(map[rune]int)
+	st.idToChar = make(map[int]rune)
+	st.nextID = 0
+
+	// Read vocabulary
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "\\t")
+		if len(parts) != 2 {
+			continue
+		}
+
+		var id int
+		if _, err = fmt.Sscanf(parts[0], "%d", &id); err != nil {
+			return fmt.Errorf("simpletokenizer: failed to parse ID: %w", err)
+		}
+
+		charBytes, err := hex.DecodeString(parts[1])
+		if err != nil {
+			return fmt.Errorf("simpletokenizer: failed to decode char: %w", err)
+		}
+
+		char := []rune(string(charBytes))[0]
+		st.charToID[char] = id
+		st.idToChar[id] = char
+
+		if id >= st.nextID {
+			st.nextID = id + 1
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("simpletokenizer: error reading file: %w", err)
+	}
+
+	return nil
 }
