@@ -95,6 +95,21 @@ Epoch 1/2, Batch 251/573, Loss: 5.5779, LR: 0.000904
 
 The model won't produce perfect Go code, but it learns basic syntax patterns, indentation, and common keywords. This demonstrates the full training pipeline working end-to-end.
 
+### Visualizing Training Progress
+
+Track your training progress with interactive HTML visualizations:
+
+```bash
+./local-code-model train -epochs 2 -batch 4 -seq 64 -metrics training_metrics.html
+```
+
+This creates a self-contained HTML file with:
+- **Loss curve**: See how loss decreases during training
+- **Learning rate schedule**: Visualize warmup → constant → decay
+- **Summary statistics**: Final loss, min loss, average loss, total steps
+
+The visualization opens in any browser with no external dependencies. Perfect for monitoring training runs, comparing hyperparameters, and understanding training dynamics.
+
 ### Options
 
 ```bash
@@ -109,7 +124,8 @@ The model won't produce perfect Go code, but it learns basic syntax patterns, in
   -lr 0.001 \           # Learning rate
   -data . \             # Directory with .go files
   -model model.bin \    # Output model path
-  -tokenizer tok.bin    # Output tokenizer path
+  -tokenizer tok.bin \  # Output tokenizer path
+  -metrics metrics.html # Optional: Save training metrics visualization
 
 # Generation
 ./local-code-model generate \
@@ -193,6 +209,7 @@ Logits (probability distribution over next token)
 │
 ├── tokenizer.go               # Character-level tokenization
 ├── serialization.go           # Model save/load
+├── visualization.go           # Training metrics visualization
 └── model.go                   # Model utilities
 ```
 

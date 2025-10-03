@@ -32,9 +32,9 @@ This document outlines planned improvements and features for the project.
   - ✅ Training dynamics and loss curves ([docs/training-dynamics.md](docs/training-dynamics.md))
 
 - [ ] **Add Visualization Tools**
-  - Attention weight visualization
-  - Training loss/perplexity plots
-  - Token embedding visualizations (t-SNE/UMAP)
+  - [ ] Attention weight visualization
+  - [x] Training loss/perplexity plots
+  - [ ] Token embedding visualizations (t-SNE/UMAP)
 
 ## Medium Term (Next 3 Months)
 
