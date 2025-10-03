@@ -110,6 +110,52 @@ This creates a self-contained HTML file with:
 
 The visualization opens in any browser with no external dependencies. Perfect for monitoring training runs, comparing hyperparameters, and understanding training dynamics.
 
+### Visualizing Attention Patterns
+
+Understand what your model "pays attention to" with interactive attention heatmaps:
+
+```bash
+./local-code-model visualize -model model.bin -tokenizer tok.bin -prompt "func main"
+```
+
+This generates an HTML visualization showing:
+- **Attention weights**: Interactive heatmap showing which tokens attend to which
+- **Layer and head selection**: Dropdown menus to explore different layers and attention heads
+- **Token labels**: See exactly which tokens are attending to each other
+
+The visualization helps you:
+- Debug model behavior (why did it generate this token?)
+- Understand learned patterns (does it attend to function names? keywords?)
+- Explore multi-head attention (different heads learn different patterns)
+- Educational tool for understanding transformer internals
+
+Example output: attention.html (self-contained, opens in any browser)
+
+### Token Embedding Visualization
+
+Explore how your model represents tokens in high-dimensional embedding space:
+
+```bash
+./local-code-model embeddings -model model.bin -tokenizer tok.bin -method pca
+```
+
+This generates an interactive 2D visualization of token embeddings:
+- **PCA** (Principal Component Analysis): Fast, preserves global structure
+- **t-SNE** (t-Distributed Stochastic Neighbor Embedding): Slower, preserves local neighborhoods
+
+The visualization shows:
+- **Token clusters**: Semantically similar tokens appear close together
+- **Interactive exploration**: Hover over points to see which token they represent
+- **Embedding relationships**: Understand what the model learned about token similarity
+
+This helps you:
+- See which tokens the model considers similar (keywords, operators, identifiers)
+- Validate embedding quality (are related tokens clustered?)
+- Understand the model's internal representation
+- Educational tool for understanding embeddings and dimensionality reduction
+
+Example output: embeddings.html (self-contained, opens in any browser)
+
 ### Tokenizer Options
 
 This project supports two tokenizer types:

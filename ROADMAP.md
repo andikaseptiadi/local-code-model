@@ -31,10 +31,10 @@ This document outlines planned improvements and features for the project.
   - ✅ Backpropagation through transformers ([docs/backpropagation.md](docs/backpropagation.md))
   - ✅ Training dynamics and loss curves ([docs/training-dynamics.md](docs/training-dynamics.md))
 
-- [ ] **Add Visualization Tools**
-  - [ ] Attention weight visualization
+- [x] **Add Visualization Tools**
+  - [x] Attention weight visualization
   - [x] Training loss/perplexity plots
-  - [ ] Token embedding visualizations (t-SNE/UMAP)
+  - [x] Token embedding visualizations (PCA/t-SNE)
 
 ## Medium Term (Next 3 Months)
 

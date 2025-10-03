@@ -136,6 +136,14 @@ type Attention struct {
 	}
 }
 
+// AttentionCollector captures attention weights during forward pass for visualization.
+// This is optional and only used when you want to analyze attention patterns.
+type AttentionCollector struct {
+	// Weights[layer][head] = attention matrix (seqLen x seqLen)
+	// Each matrix shows how much each token (row) attends to other tokens (columns)
+	Weights [][][]float64
+}
+
 // NewAttention creates a new attention layer.
 func NewAttention(embedDim, numHeads, seqLen int) *Attention {
 	if embedDim%numHeads != 0 {
@@ -187,8 +195,9 @@ func NewAttention(embedDim, numHeads, seqLen int) *Attention {
 // x shape: (seqLen, embedDim)
 // cache: optional KV cache for efficient generation (can be nil)
 // layerIdx: which layer this attention is for (needed for cache lookup)
+// collector: optional attention collector for visualization (can be nil)
 // Returns: (seqLen, embedDim)
-func (a *Attention) Forward(x *Tensor, cache *KVCache, layerIdx int) *Tensor {
+func (a *Attention) Forward(x *Tensor, cache *KVCache, layerIdx int, collector *AttentionCollector) *Tensor {
 	if len(x.shape) != 2 {
 		panic("transformer: attention input must be 2D (seqLen, embedDim)")
 	}
@@ -244,6 +253,23 @@ func (a *Attention) Forward(x *Tensor, cache *KVCache, layerIdx int) *Tensor {
 
 	// Softmax to get attention weights
 	weights := Softmax(scores) // (seqLen, totalLen)
+
+	// Capture attention weights for visualization if collector provided
+	if collector != nil {
+		// Ensure the collector has space for this layer
+		for len(collector.Weights) <= layerIdx {
+			collector.Weights = append(collector.Weights, [][]float64{})
+		}
+
+		// Store the attention matrix (simplified: not splitting by head for now)
+		// weights shape: (seqLen, totalLen)
+		seqLen := weights.shape[0]
+		totalLen := weights.shape[1]
+		attentionMatrix := make([]float64, seqLen*totalLen)
+		copy(attentionMatrix, weights.data)
+
+		collector.Weights[layerIdx] = append(collector.Weights[layerIdx], attentionMatrix)
+	}
 
 	// Apply attention to values
 	output := matmul(weights, v) // (seqLen, embedDim)
@@ -413,9 +439,15 @@ func NewTransformerBlock(config Config) *TransformerBlock {
 // cache: optional KV cache for efficient generation (can be nil)
 // layerIdx: which layer this block is for (needed for cache lookup)
 func (tb *TransformerBlock) Forward(x *Tensor, cache *KVCache, layerIdx int) *Tensor {
+	return tb.ForwardWithCollector(x, cache, layerIdx, nil)
+}
+
+// ForwardWithCollector applies the transformer block with optional attention capture.
+// This is used for visualization - normal forward passes use Forward() with collector=nil.
+func (tb *TransformerBlock) ForwardWithCollector(x *Tensor, cache *KVCache, layerIdx int, collector *AttentionCollector) *Tensor {
 	// Self-attention with residual connection
 	normed := tb.ln1.Forward(x)
-	attended := tb.attn.Forward(normed, cache, layerIdx)
+	attended := tb.attn.Forward(normed, cache, layerIdx, collector)
 	x = Add(x, attended)
 
 	// Feed-forward with residual connection
