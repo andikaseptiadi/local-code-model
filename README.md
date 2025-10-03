@@ -136,6 +136,7 @@ This codebase is designed to be read like a textbook. See **[LEARNING.md](LEARNI
 **Deep dive tutorials:**
 - **[Understanding the Attention Mechanism](docs/attention-mechanism.md)** - How attention works, with intuition, mathematics, and practical examples
 - **[Backpropagation Through Transformers](docs/backpropagation.md)** - How gradients flow backward and learning happens, with step-by-step walkthrough
+- **[Training Dynamics and Loss Curves](docs/training-dynamics.md)** - How models learn, loss curves, learning rate schedules, and debugging training problems
 
 **Time to understand:**
 - Quick overview: 2-3 hours

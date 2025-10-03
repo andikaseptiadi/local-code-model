@@ -26,10 +26,10 @@ This document outlines planned improvements and features for the project.
   - KV caching dramatically speeds up generation
   - Good teaching opportunity about optimization
 
-- [x] **Create Blog Posts/Tutorials** (2/3 complete)
+- [x] **Create Blog Posts/Tutorials** (3/3 complete)
   - ✅ Attention mechanism deep dive ([docs/attention-mechanism.md](docs/attention-mechanism.md))
   - ✅ Backpropagation through transformers ([docs/backpropagation.md](docs/backpropagation.md))
-  - [ ] Training dynamics and loss curves
+  - ✅ Training dynamics and loss curves ([docs/training-dynamics.md](docs/training-dynamics.md))
 
 - [ ] **Add Visualization Tools**
   - Attention weight visualization
