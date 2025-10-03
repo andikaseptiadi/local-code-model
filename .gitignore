@@ -15,6 +15,7 @@ local-code-model
 
 # Trained models
 *.bin
+*.pt
 tiny_model.bin
 tiny_tokenizer.bin
 model.bin
