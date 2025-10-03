@@ -4,24 +4,24 @@ This document outlines planned improvements and features for the project.
 
 ## Immediate (This Week)
 
-- [ ] **Get Go Report Card Badge**
+- [x] **Get Go Report Card Badge**
   - Submit to https://goreportcard.com/report/github.com/scttfrdmn/local-code-model
   - Add A+ badge to README
   - Validates all quality work
 
-- [ ] **Add GitHub Actions CI/CD**
+- [x] **Add GitHub Actions CI/CD**
   - Run `make quality` on every PR/push
   - Automatically run tests
   - Ensure quality stays high as project evolves
 
-- [ ] **Add Example Outputs to README**
+- [x] **Add Example Outputs to README**
   - Show what the model actually generates after training
   - Include loss curves
   - Make it more tangible for learners
 
 ## Short Term (This Month)
 
-- [ ] **Add KV Cache for Inference**
+- [x] **Add KV Cache for Inference**
   - Currently generating is slow (recomputes everything each token)
   - KV caching dramatically speeds up generation
   - Good teaching opportunity about optimization

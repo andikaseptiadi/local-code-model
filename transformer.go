@@ -31,7 +31,8 @@ import (
 //   ✓ Residual connections and layer normalization
 //   ✓ Position embeddings
 //   ✓ Autoregressive generation
-//   - No: KV-caching, flash attention, rotary embeddings (modern optimizations)
+//   ✓ KV-caching for efficient inference
+//   - No: Flash attention, rotary embeddings (modern optimizations)
 //
 // Implementation Level: Baseline (naive matmul from tensor.go)
 //   - Uses single-threaded matrix operations
@@ -184,8 +185,10 @@ func NewAttention(embedDim, numHeads, seqLen int) *Attention {
 
 // Forward computes attention output for input x.
 // x shape: (seqLen, embedDim)
+// cache: optional KV cache for efficient generation (can be nil)
+// layerIdx: which layer this attention is for (needed for cache lookup)
 // Returns: (seqLen, embedDim)
-func (a *Attention) Forward(x *Tensor) *Tensor {
+func (a *Attention) Forward(x *Tensor, cache *KVCache, layerIdx int) *Tensor {
 	if len(x.shape) != 2 {
 		panic("transformer: attention input must be 2D (seqLen, embedDim)")
 	}
@@ -203,30 +206,44 @@ func (a *Attention) Forward(x *Tensor) *Tensor {
 		return MatMul(t1, t2)
 	}
 
-	// Project to Q, K, V
+	// Project to Q, K, V for NEW tokens only
 	q := matmul(x, a.wq) // (seqLen, embedDim)
 	k := matmul(x, a.wk)
 	v := matmul(x, a.wv)
 
+	// If using KV cache, append new K/V and retrieve full history
+	if cache != nil {
+		// Append new K/V to cache
+		cache.Append(layerIdx, k, v)
+
+		// Replace K and V with full cached history
+		k = cache.GetKeys(layerIdx)
+		v = cache.GetValues(layerIdx)
+	}
+
 	// Compute attention scores: Q @ K^T / sqrt(d_k)
 	kt := Transpose(k)
-	scores := matmul(q, kt) // (seqLen, seqLen)
+	scores := matmul(q, kt) // (seqLen, cachedLen) or (seqLen, seqLen) without cache
 
 	// Scale for numerical stability
 	scale := 1.0 / math.Sqrt(float64(a.embedDim))
 	scores = Scale(scores, scale)
 
 	// Apply causal mask (set future positions to -inf)
+	// When using cache: seqLen=1 (new token), scores shape is (1, cachedLen)
+	// Without cache: seqLen=full sequence, scores shape is (seqLen, seqLen)
+	totalLen := scores.shape[1] // Total sequence length (cached + new)
 	for i := 0; i < seqLen; i++ {
-		for j := 0; j < seqLen; j++ {
-			if a.mask.At(i, j) == 0 {
+		currentPos := totalLen - seqLen + i // Position in full sequence
+		for j := 0; j < totalLen; j++ {
+			if j > currentPos {
 				scores.Set(-1e9, i, j)
 			}
 		}
 	}
 
 	// Softmax to get attention weights
-	weights := Softmax(scores) // (seqLen, seqLen)
+	weights := Softmax(scores) // (seqLen, totalLen)
 
 	// Apply attention to values
 	output := matmul(weights, v) // (seqLen, embedDim)
@@ -393,10 +410,12 @@ func NewTransformerBlock(config Config) *TransformerBlock {
 
 // Forward applies the transformer block.
 // x shape: (seqLen, embedDim)
-func (tb *TransformerBlock) Forward(x *Tensor) *Tensor {
+// cache: optional KV cache for efficient generation (can be nil)
+// layerIdx: which layer this block is for (needed for cache lookup)
+func (tb *TransformerBlock) Forward(x *Tensor, cache *KVCache, layerIdx int) *Tensor {
 	// Self-attention with residual connection
 	normed := tb.ln1.Forward(x)
-	attended := tb.attn.Forward(normed)
+	attended := tb.attn.Forward(normed, cache, layerIdx)
 	x = Add(x, attended)
 
 	// Feed-forward with residual connection
@@ -517,9 +536,9 @@ func (g *GPT) Forward(inputIDs []int) *Tensor {
 		}
 	}
 
-	// Pass through transformer blocks
-	for _, block := range g.blocks {
-		x = block.Forward(x)
+	// Pass through transformer blocks (no cache for training)
+	for i, block := range g.blocks {
+		x = block.Forward(x, nil, i)
 	}
 
 	// Final layer norm
@@ -542,18 +561,41 @@ func (g *GPT) Generate(prompt []int, maxTokens int) []int {
 // GenerateWithSampling produces tokens autoregressively with customizable sampling.
 // prompt: initial token IDs
 // maxTokens: maximum number of new tokens to generate
-// config: sampling configuration (temperature, top-k, top-p)
+// config: sampling configuration (temperature, top-k, top-p, and UseKVCache)
 // Returns: generated token IDs (including prompt)
 func (g *GPT) GenerateWithSampling(prompt []int, maxTokens int, config *SampleConfig) []int {
 	tokens := make([]int, len(prompt))
 	copy(tokens, prompt)
 
+	// Create KV cache if enabled (default: true for speed)
+	var cache *KVCache
+	if config.UseKVCache {
+		cache = NewKVCache(g.config.NumLayers, g.config.SeqLen, g.config.EmbedDim)
+	}
+
 	for i := 0; i < maxTokens; i++ {
-		// Forward pass
-		logits := g.Forward(tokens)
+		var logits *Tensor
+
+		if config.UseKVCache && cache != nil {
+			// With KV cache: Only process the most recent token(s)
+			var inputTokens []int
+			if i == 0 {
+				// First iteration: process entire prompt to populate cache
+				inputTokens = tokens
+			} else {
+				// Subsequent iterations: only process the new token
+				inputTokens = tokens[len(tokens)-1:]
+			}
+
+			// Forward pass with KV cache
+			logits = g.forwardWithCache(inputTokens, cache)
+		} else {
+			// Without KV cache: recompute from scratch each time (slow!)
+			logits = g.Forward(tokens)
+		}
 
 		// Get logits for last position
-		lastPos := len(tokens) - 1
+		lastPos := logits.shape[0] - 1
 		lastLogits := make([]float64, g.config.VocabSize)
 		for j := 0; j < g.config.VocabSize; j++ {
 			lastLogits[j] = logits.At(lastPos, j)
@@ -572,6 +614,38 @@ func (g *GPT) GenerateWithSampling(prompt []int, maxTokens int, config *SampleCo
 	}
 
 	return tokens
+}
+
+// forwardWithCache is a helper for generation with KV caching.
+// It's similar to Forward() but accepts a KV cache and only processes new tokens.
+func (g *GPT) forwardWithCache(tokens []int, cache *KVCache) *Tensor {
+	seqLen := len(tokens)
+	x := NewTensor(seqLen, g.config.EmbedDim)
+
+	// Token + positional embeddings
+	// NOTE: Position indices continue from where cache left off
+	startPos := cache.CachedLen()
+	for i, tokenID := range tokens {
+		posIdx := startPos + i
+		for j := 0; j < g.config.EmbedDim; j++ {
+			tokEmb := g.tokenEmbed.At(tokenID, j)
+			posEmb := g.posEmbed.At(posIdx, j)
+			x.Set(tokEmb+posEmb, i, j)
+		}
+	}
+
+	// Pass through transformer blocks WITH cache
+	for i, block := range g.blocks {
+		x = block.Forward(x, cache, i)
+	}
+
+	// Final layer norm
+	x = g.lnFinal.Forward(x)
+
+	// Project to vocabulary logits
+	logits := g.matmul(x, g.lmHead)
+
+	return logits
 }
 
 // ===========================================================================
@@ -627,6 +701,7 @@ type SampleConfig struct {
 	Temperature float64 // Temperature for sampling (0 = greedy, higher = more random)
 	TopK        int     // Top-k sampling (0 = disabled)
 	TopP        float64 // Top-p (nucleus) sampling (0 = disabled)
+	UseKVCache  bool    // Use KV caching for faster generation (default: true for speed)
 }
 
 // NewSampleConfig creates a default sampling configuration.
