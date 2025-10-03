@@ -1,1 +1,42 @@
+# Binaries
 local-code-model
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output coverage files
+*.out
+*.prof
+
+# Trained models
+*.bin
+tiny_model.bin
+tiny_tokenizer.bin
+model.bin
+tok.bin
+tokenizer.bin
+
+# Benchmark results
+benchmark_*.txt
+*_results.txt
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/

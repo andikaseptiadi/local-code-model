@@ -241,24 +241,40 @@ func (t *Tokenizer) Save(filename string) error {
 	if err != nil {
 		return fmt.Errorf("tokenizer: failed to create file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("tokenizer: failed to close file: %w", cerr)
+		}
+	}()
 
 	w := bufio.NewWriter(f)
-	defer w.Flush()
+	defer func() {
+		if ferr := w.Flush(); ferr != nil && err == nil {
+			err = fmt.Errorf("tokenizer: failed to flush writer: %w", ferr)
+		}
+	}()
 
 	// Write special tokens
-	fmt.Fprintf(w, "SPECIAL_TOKENS\n")
+	if _, err = fmt.Fprintf(w, "SPECIAL_TOKENS\n"); err != nil {
+		return fmt.Errorf("tokenizer: failed to write special tokens header: %w", err)
+	}
 	for tok, id := range t.specialToks {
-		fmt.Fprintf(w, "%s\t%d\n", tok, id)
+		if _, err = fmt.Fprintf(w, "%s\t%d\n", tok, id); err != nil {
+			return fmt.Errorf("tokenizer: failed to write special token: %w", err)
+		}
 	}
 
 	// Write merges
 	// Use hex encoding to handle any byte values safely
-	fmt.Fprintf(w, "MERGES\n")
+	if _, err = fmt.Fprintf(w, "MERGES\n"); err != nil {
+		return fmt.Errorf("tokenizer: failed to write merges header: %w", err)
+	}
 	for _, merge := range t.merges {
 		firstHex := hex.EncodeToString([]byte(merge.first))
 		secondHex := hex.EncodeToString([]byte(merge.second))
-		fmt.Fprintf(w, "%s %s\n", firstHex, secondHex)
+		if _, err = fmt.Fprintf(w, "%s %s\n", firstHex, secondHex); err != nil {
+			return fmt.Errorf("tokenizer: failed to write merge: %w", err)
+		}
 	}
 
 	return nil
@@ -275,7 +291,11 @@ func (t *Tokenizer) Load(filename string) error {
 	if err != nil {
 		return fmt.Errorf("tokenizer: failed to open file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("tokenizer: failed to close file: %w", cerr)
+		}
+	}()
 
 	scanner := bufio.NewScanner(f)
 	section := ""
@@ -300,7 +320,9 @@ func (t *Tokenizer) Load(filename string) error {
 			parts := strings.Split(line, "\t")
 			if len(parts) == 2 {
 				var id int
-				fmt.Sscanf(parts[1], "%d", &id)
+				if _, err = fmt.Sscanf(parts[1], "%d", &id); err != nil {
+					return fmt.Errorf("tokenizer: failed to parse token ID: %w", err)
+				}
 				t.specialToks[parts[0]] = id
 				t.vocab[parts[0]] = id
 				t.vocabInv[id] = parts[0]

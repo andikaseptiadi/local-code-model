@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	// Seed random number generator
-	rand.Seed(time.Now().UnixNano())
+	// Seed random number generator (using modern approach for Go 1.20+)
+	_ = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Check for command-line mode
 	if len(os.Args) > 1 {

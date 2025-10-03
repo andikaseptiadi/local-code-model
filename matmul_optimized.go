@@ -268,20 +268,6 @@ func MatMulCacheBlockedParallel(a, b *Tensor, blockSize int, cfg ComputeConfig) 
 	return out
 }
 
-// matmulSingleThreaded is a simple single-threaded matmul helper.
-func matmulSingleThreaded(a, b, out *Tensor, m, n, k int) *Tensor {
-	for i := 0; i < m; i++ {
-		for j := 0; j < n; j++ {
-			sum := 0.0
-			for kk := 0; kk < k; kk++ {
-				sum += a.At(i, kk) * b.At(kk, j)
-			}
-			out.Set(sum, i, j)
-		}
-	}
-	return out
-}
-
 // ParallelMatMul is a stub - not needed for training.
 // For parallel execution, see ../arm-benchmark/compute.go.
 func ParallelMatMul(a, b *Tensor, cfg ComputeConfig) *Tensor {

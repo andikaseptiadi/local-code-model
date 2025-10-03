@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -180,8 +179,8 @@ func RunTrainCommand(args []string) error {
 			targets := make([][]int, len(batch))
 			for i, seq := range batch {
 				if len(seq) > 1 {
-					inputs[i] = seq[0 : len(seq)-1]  // All tokens except last
-					targets[i] = seq[1:]              // All tokens except first (shifted by 1)
+					inputs[i] = seq[0 : len(seq)-1] // All tokens except last
+					targets[i] = seq[1:]            // All tokens except first (shifted by 1)
 				}
 			}
 
@@ -247,7 +246,7 @@ func loadGoFiles(dir string) (string, error) {
 			return err
 		}
 		if !info.IsDir() && strings.HasSuffix(path, ".go") {
-			content, err := ioutil.ReadFile(path)
+			content, err := os.ReadFile(path)
 			if err != nil {
 				return err
 			}

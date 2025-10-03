@@ -822,7 +822,11 @@ func (g *GPT) Save(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close file: %w", cerr)
+		}
+	}()
 
 	// Write config as JSON header
 	configJSON, err := json.Marshal(g.config)
@@ -923,7 +927,11 @@ func LoadGPT(filename string) (*GPT, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close file: %w", cerr)
+		}
+	}()
 
 	// Read header length
 	var headerLen uint32
