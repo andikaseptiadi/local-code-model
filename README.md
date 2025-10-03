@@ -134,7 +134,8 @@ This codebase is designed to be read like a textbook. See **[LEARNING.md](LEARNI
 6. `cmd_train.go` - End-to-end training example
 
 **Deep dive tutorials:**
-- **[Understanding the Attention Mechanism](docs/attention-mechanism.md)** - A comprehensive guide to how attention works, with intuition, mathematics, and practical examples
+- **[Understanding the Attention Mechanism](docs/attention-mechanism.md)** - How attention works, with intuition, mathematics, and practical examples
+- **[Backpropagation Through Transformers](docs/backpropagation.md)** - How gradients flow backward and learning happens, with step-by-step walkthrough
 
 **Time to understand:**
 - Quick overview: 2-3 hours
