@@ -90,6 +90,9 @@ type BlockCache struct {
 
 // AttentionCache stores activations for attention layer.
 type AttentionCache struct {
+	// Input to attention layer
+	input *Tensor
+
 	// Projections
 	q, k, v *Tensor
 
@@ -105,6 +108,7 @@ type AttentionCache struct {
 
 // FFCache stores activations for feed-forward layer.
 type FFCache struct {
+	input         *Tensor // Input to feed-forward layer
 	hidden        *Tensor // After first linear + activation
 	preActivation *Tensor // Before activation (needed for GELU gradient)
 }
@@ -184,7 +188,8 @@ func (gpt *GPT) ForwardWithCache(inputIDs []int) (*Tensor, *ForwardCache) {
 	x = gpt.lnFinal.Forward(x)
 
 	// Project to vocabulary
-	logits := MatMul(x, Transpose(gpt.lmHead))
+	// x: (seqLen, embedDim), lmHead: (embedDim, vocabSize) → logits: (seqLen, vocabSize)
+	logits := MatMul(x, gpt.lmHead)
 
 	return logits, cache
 }
@@ -192,6 +197,7 @@ func (gpt *GPT) ForwardWithCache(inputIDs []int) (*Tensor, *ForwardCache) {
 // ForwardWithCache for Attention layer.
 func (attn *Attention) ForwardWithCache(x *Tensor) (*Tensor, *AttentionCache) {
 	cache := &AttentionCache{}
+	cache.input = x.Clone() // Store input for backward pass
 
 	seqLen := x.shape[0]
 	embedDim := x.shape[1]
@@ -269,6 +275,7 @@ func (attn *Attention) ForwardWithCache(x *Tensor) (*Tensor, *AttentionCache) {
 // ForwardWithCache for FeedForward layer.
 func (ff *FeedForward) ForwardWithCache(x *Tensor) (*Tensor, *FFCache) {
 	cache := &FFCache{}
+	cache.input = x.Clone() // Store input for backward pass
 
 	// First linear: x @ W1 + b1
 	hidden := MatMul(x, ff.w1)
@@ -294,19 +301,26 @@ func (ff *FeedForward) ForwardWithCache(x *Tensor) (*Tensor, *FFCache) {
 // Backward implements backpropagation through the GPT model.
 func (gpt *GPT) Backward(gradLogits *Tensor, cache *ForwardCache) {
 	// Gradient through output projection
-	// logits = x @ lmHead^T
-	// ∂L/∂x = gradLogits @ lmHead
-	// ∂L/∂lmHead = gradLogits^T @ x
+	// logits = x @ lmHead
+	// where x: (seqLen, embedDim), lmHead: (embedDim, vocabSize), logits: (seqLen, vocabSize)
+	// ∂L/∂x = gradLogits @ lmHead^T
+	// ∂L/∂lmHead = x^T @ gradLogits
 
 	x := cache.lnFinalInput // Input to final projection
 
-	// Gradient for lmHead
-	gradLogitsT := Transpose(gradLogits)
-	gradLmHead := MatMul(gradLogitsT, x)
+	// Gradient for lmHead: x^T @ gradLogits
+	// x: (seqLen, embedDim) → x^T: (embedDim, seqLen)
+	// gradLogits: (seqLen, vocabSize)
+	// Result: (embedDim, vocabSize) matching lmHead shape
+	xT := Transpose(x)
+	gradLmHead := MatMul(xT, gradLogits)
 	gpt.lmHead.AccumulateGrad(gradLmHead)
 
-	// Gradient for x (input to output projection)
-	gradX := MatMul(gradLogits, gpt.lmHead)
+	// Gradient for x (input to output projection): gradLogits @ lmHead^T
+	// gradLogits: (seqLen, vocabSize), lmHead^T: (vocabSize, embedDim)
+	// Result: (seqLen, embedDim)
+	lmHeadT := Transpose(gpt.lmHead)
+	gradX := MatMul(gradLogits, lmHeadT)
 
 	// Backward through final layer norm
 	gradX, gradGamma, gradBeta := LayerNormBackward(
@@ -388,7 +402,8 @@ func (ff *FeedForward) Backward(gradOutput *Tensor, cache *FFCache) *Tensor {
 	gradPreActivation := GELUBackward(cache.preActivation, gradHidden)
 
 	// Backward through first linear: hidden = x @ W1 + b1
-	gradInput, gradW1 := MatMulBackward(gradPreActivation, ff.w1, gradPreActivation)
+	// Use cache.input (the actual input x) instead of gradPreActivation
+	gradInput, gradW1 := MatMulBackward(cache.input, ff.w1, gradPreActivation)
 	ff.w1.AccumulateGrad(gradW1)
 
 	// Gradient for bias
@@ -401,41 +416,106 @@ func (ff *FeedForward) Backward(gradOutput *Tensor, cache *FFCache) *Tensor {
 
 // Backward through Attention layer.
 func (attn *Attention) Backward(gradOutput *Tensor, cache *AttentionCache) *Tensor {
-	// This is simplified - full implementation would handle multi-head properly
-	// For now, backward through the main operations
+	seqLen := cache.input.shape[0]
+	embedDim := cache.input.shape[1]
 
-	// Backward through output projection
+	// Backward through output projection: output = context @ wo
 	gradContext, gradWo := MatMulBackward(cache.context, attn.wo, gradOutput)
 	attn.wo.AccumulateGrad(gradWo)
 
-	// Backward through attention mechanism
-	// context = weights @ V
-	gradWeights, gradV := MatMulBackward(cache.weights, cache.v, gradContext)
+	// gradContext is (seqLen, embedDim), need to split into heads
+	// Reshape to (seqLen, numHeads, headDim)
+	gradContextReshaped := gradContext.Reshape(seqLen, attn.numHeads, attn.headDim)
 
-	// Backward through softmax
-	gradScores := SoftmaxBackward(cache.weights, gradWeights)
+	// Reshape cached Q, K, V for multi-head: (seqLen, embedDim) -> (seqLen, numHeads, headDim)
+	q := cache.q.Reshape(seqLen, attn.numHeads, attn.headDim)
+	k := cache.k.Reshape(seqLen, attn.numHeads, attn.headDim)
+	v := cache.v.Reshape(seqLen, attn.numHeads, attn.headDim)
 
-	// Backward through scaling
-	gradScores = Scale(gradScores, 1.0/math.Sqrt(float64(attn.headDim)))
+	// Accumulate gradients for Q, K, V across all heads
+	gradQ := NewTensor(seqLen, attn.numHeads, attn.headDim)
+	gradK := NewTensor(seqLen, attn.numHeads, attn.headDim)
+	gradV := NewTensor(seqLen, attn.numHeads, attn.headDim)
 
-	// Backward through attention scores: scores = Q @ K^T
-	gradQ, gradK := MatMulBackward(cache.q, Transpose(cache.k), gradScores)
+	// Process each head separately (matching forward pass)
+	for h := 0; h < attn.numHeads; h++ {
+		// Extract head-specific tensors
+		qHead := NewTensor(seqLen, attn.headDim)
+		kHead := NewTensor(seqLen, attn.headDim)
+		vHead := NewTensor(seqLen, attn.headDim)
+		gradContextHead := NewTensor(seqLen, attn.headDim)
+
+		for i := 0; i < seqLen; i++ {
+			for d := 0; d < attn.headDim; d++ {
+				qHead.Set(q.At(i, h, d), i, d)
+				kHead.Set(k.At(i, h, d), i, d)
+				vHead.Set(v.At(i, h, d), i, d)
+				gradContextHead.Set(gradContextReshaped.At(i, h, d), i, d)
+			}
+		}
+
+		// Forward: context = weights @ V
+		// Backward through context = weights @ V
+		kT := Transpose(kHead)
+		scores := MatMul(qHead, kT)
+		scale := 1.0 / math.Sqrt(float64(attn.headDim))
+		scores = Scale(scores, scale)
+
+		// Apply causal mask (same as forward)
+		for i := 0; i < seqLen; i++ {
+			for j := i + 1; j < seqLen; j++ {
+				scores.Set(-1e9, i, j)
+			}
+		}
+
+		weights := Softmax(scores)
+
+		// Backward: context = weights @ vHead
+		gradWeights, gradVHead := MatMulBackward(weights, vHead, gradContextHead)
+
+		// Backward through softmax
+		gradScores := SoftmaxBackward(weights, gradWeights)
+
+		// Backward through scaling
+		gradScores = Scale(gradScores, scale)
+
+		// Backward through scores = qHead @ kHead^T
+		gradQHead, gradKT := MatMulBackward(qHead, kT, gradScores)
+
+		// gradKT is gradient w.r.t. kT (transposed), so transpose back to get gradient w.r.t. kHead
+		gradKHead := Transpose(gradKT)
+
+		// Store gradients back into multi-head tensors
+		for i := 0; i < seqLen; i++ {
+			for d := 0; d < attn.headDim; d++ {
+				gradQ.Set(gradQHead.At(i, d), i, h, d)
+				gradK.Set(gradKHead.At(i, d), i, h, d)
+				gradV.Set(gradVHead.At(i, d), i, h, d)
+			}
+		}
+	}
+
+	// Flatten gradients back to (seqLen, embedDim)
+	gradQFlat := gradQ.Reshape(seqLen, embedDim)
+	gradKFlat := gradK.Reshape(seqLen, embedDim)
+	gradVFlat := gradV.Reshape(seqLen, embedDim)
 
 	// Backward through Q, K, V projections
-	gradInput := NewTensor(cache.q.shape[0], attn.embedDim)
+	// All three projections share the same input, so gradients add up
+	gradInput := NewTensor(cache.input.shape...)
 
-	// Q projection
-	gradInputQ, gradWq := MatMulBackward(gradInput, attn.wq, gradQ)
+	// Q projection: Q = input @ Wq
+	gradInputQ, gradWq := MatMulBackward(cache.input, attn.wq, gradQFlat)
 	attn.wq.AccumulateGrad(gradWq)
 	gradInput = Add(gradInput, gradInputQ)
 
-	// K projection
-	gradInputK, gradWk := MatMulBackward(gradInput, attn.wk, gradK)
+	// K projection: K = input @ Wk
+	gradInputK, gradWk := MatMulBackward(cache.input, attn.wk, gradKFlat)
 	attn.wk.AccumulateGrad(gradWk)
 	gradInput = Add(gradInput, gradInputK)
 
-	// V projection
-	gradInputV, gradWv := MatMulBackward(gradInput, attn.wv, gradV)
+	// V projection: V = input @ Wv
+	gradInputV, gradWv := MatMulBackward(cache.input, attn.wv, gradVFlat)
 	attn.wv.AccumulateGrad(gradWv)
 	gradInput = Add(gradInput, gradInputV)
 

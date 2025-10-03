@@ -174,14 +174,18 @@ func RunTrainCommand(args []string) error {
 			currentLR := scheduler.GetLR()
 
 			// Training step
-			inputs := batch[:len(batch)-1]
-			targets := make([][]int, len(inputs))
-			for i := range inputs {
-				// Target is input shifted by 1 (next token prediction)
-				targets[i] = []int{batch[i+1][0]}
+			// batch is [][]int where each []int is a sequence
+			// For each sequence, create input (all but last token) and target (shifted by 1)
+			inputs := make([][]int, len(batch))
+			targets := make([][]int, len(batch))
+			for i, seq := range batch {
+				if len(seq) > 1 {
+					inputs[i] = seq[0 : len(seq)-1]  // All tokens except last
+					targets[i] = seq[1:]              // All tokens except first (shifted by 1)
+				}
 			}
 
-			loss := TrainStep(model, [][]int{inputs[0]}, targets, optimizer, currentLR)
+			loss := TrainStep(model, inputs, targets, optimizer, currentLR)
 			epochLoss += loss
 
 			// Print progress every 10 batches
