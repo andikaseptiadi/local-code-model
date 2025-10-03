@@ -102,6 +102,7 @@ func RunTrainCommand(args []string) error {
 	dataDir := fs.String("data", ".", "Directory containing .go files for training")
 	modelPath := fs.String("model", "tiny_model.bin", "Output model path")
 	tokenizerPath := fs.String("tokenizer", "tiny_tokenizer.bin", "Output tokenizer path")
+	metricsPath := fs.String("metrics", "", "Optional path to save training metrics visualization (HTML file)")
 
 	// Validation
 	genSamples := fs.Int("gen-samples", 3, "Number of samples to generate after training")
@@ -163,9 +164,16 @@ func RunTrainCommand(args []string) error {
 	scheduler := NewLRScheduler(*lr, *lr*0.1, 10, len(trainData)**epochs)
 	fmt.Println()
 
+	// Create metrics tracker if visualization requested
+	var metrics *TrainingMetrics
+	if *metricsPath != "" {
+		metrics = NewTrainingMetrics()
+	}
+
 	// Step 6: Train!
 	fmt.Println("Step 6: Training...")
 	fmt.Println("-------------------------------------------------------------------")
+	globalStep := 0
 	for epoch := 0; epoch < *epochs; epoch++ {
 		epochLoss := 0.0
 		for batchIdx, batch := range trainData {
@@ -187,6 +195,12 @@ func RunTrainCommand(args []string) error {
 			loss := TrainStep(model, inputs, targets, optimizer, currentLR)
 			epochLoss += loss
 
+			// Record metrics if tracker is enabled
+			if metrics != nil {
+				metrics.Record(globalStep, loss, currentLR, epoch, batchIdx)
+			}
+			globalStep++
+
 			// Print progress every 10 batches
 			if batchIdx%10 == 0 {
 				fmt.Printf("Epoch %d/%d, Batch %d/%d, Loss: %.4f, LR: %.6f\n",
@@ -199,8 +213,18 @@ func RunTrainCommand(args []string) error {
 	}
 	fmt.Println()
 
-	// Step 7: Save model
-	fmt.Println("Step 7: Saving model and tokenizer")
+	// Step 7: Save metrics visualization if requested
+	if metrics != nil && *metricsPath != "" {
+		fmt.Println("Step 7: Saving training metrics visualization")
+		if err := metrics.SaveHTML(*metricsPath); err != nil {
+			return fmt.Errorf("failed to save metrics: %v", err)
+		}
+		fmt.Printf("  Metrics visualization saved to: %s\n", *metricsPath)
+		fmt.Println()
+	}
+
+	// Step 8: Save model
+	fmt.Println("Step 8: Saving model and tokenizer")
 	if err := model.Save(*modelPath); err != nil {
 		return fmt.Errorf("failed to save model: %v", err)
 	}
@@ -211,9 +235,9 @@ func RunTrainCommand(args []string) error {
 	fmt.Printf("  Tokenizer saved to: %s\n", *tokenizerPath)
 	fmt.Println()
 
-	// Step 8: Generate samples to validate
+	// Step 9: Generate samples to validate
 	if *genSamples > 0 {
-		fmt.Println("Step 8: Generating sample outputs")
+		fmt.Println("Step 9: Generating sample outputs")
 		fmt.Println("-------------------------------------------------------------------")
 		prompts := []string{"func ", "package ", "type "}
 		for i := 0; i < *genSamples && i < len(prompts); i++ {
