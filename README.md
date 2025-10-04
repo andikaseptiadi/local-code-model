@@ -181,6 +181,30 @@ Example:
 ./local-code-model train -tokenizer-type bpe
 ```
 
+### Modern Architecture Options
+
+This project supports switchable architecture improvements that let you compare classical (GPT-2) and modern (LLaMA-style) transformer components:
+
+- **`--use-rope`**: Use RoPE (Rotary Position Embeddings) instead of learned positional embeddings. Used in LLaMA, GPT-NeoX, and other modern LLMs. RoPE encodes position information directly into the attention mechanism with zero additional parameters.
+
+- **`--use-swiglu`**: Use SwiGLU activation in feed-forward layers instead of GELU. SwiGLU (Swish-Gated Linear Unit) is used in PaLM and LLaMA models, offering better performance through a gating mechanism.
+
+- **`--use-rmsnorm`**: Use RMSNorm instead of LayerNorm for normalization. RMSNorm is simpler and faster (~10-30% less computation) while achieving comparable performance. Used in LLaMA, GPT-NeoX, and T5.
+
+- **`--use-explicit-mask`**: Use explicit pre-computed causal mask instead of dynamic on-the-fly masking. The explicit mask is more architecturally correct and matches the original Transformer paper implementation, while dynamic masking (default) is faster and more implicit.
+
+**Example with modern architecture:**
+```bash
+./local-code-model train \
+  -layers 2 \
+  -embed 64 \
+  -heads 2 \
+  -use-rope \         # Modern positional encoding
+  -use-swiglu \       # Modern activation
+  -use-rmsnorm \      # Modern normalization
+  -use-explicit-mask  # Explicit causal masking
+```
+
 ### Options
 
 ```bash
@@ -197,7 +221,11 @@ Example:
   -model model.bin \    # Output model path
   -tokenizer tok.bin \  # Output tokenizer path
   -tokenizer-type char \  # Tokenizer type: 'char' (default) or 'bpe'
-  -metrics metrics.html # Optional: Save training metrics visualization
+  -metrics metrics.html \  # Optional: Save training metrics visualization
+  -use-rope \           # Optional: Use RoPE positional embeddings
+  -use-swiglu \         # Optional: Use SwiGLU activation
+  -use-rmsnorm \        # Optional: Use RMSNorm normalization
+  -use-explicit-mask    # Optional: Use explicit causal mask
 
 # Generation
 ./local-code-model generate \

@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 license
 - Semantic versioning
 - Keep a Changelog format
+- Switchable modern architecture improvements:
+  - RoPE (Rotary Position Embeddings) via `--use-rope` flag
+  - SwiGLU activation in feed-forward layers via `--use-swiglu` flag
+  - RMSNorm normalization via `--use-rmsnorm` flag
+  - Explicit causal masking via `--use-explicit-mask` flag
+- Training metrics visualization (HTML output with loss curves and learning rate schedule)
+- Attention pattern visualization (interactive heatmaps)
+- Token embedding visualization (PCA and t-SNE)
+- Byte-Pair Encoding (BPE) tokenizer support via `--tokenizer-type bpe`
+- KV cache for efficient inference
+- Interactive Jupyter notebooks for hands-on learning
 
 ### Fixed
 - Training loop batch data structuring
