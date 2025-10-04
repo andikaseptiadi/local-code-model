@@ -147,23 +147,7 @@ func (ff *SwiGLUFeedForward) Forward(x *Tensor) *Tensor {
 	return output
 }
 
-// Mul performs element-wise multiplication (Hadamard product)
-func Mul(a, b *Tensor) *Tensor {
-	if len(a.shape) != len(b.shape) {
-		panic("mul: tensors must have same rank")
-	}
-	for i := range a.shape {
-		if a.shape[i] != b.shape[i] {
-			panic("mul: tensors must have same shape")
-		}
-	}
-
-	out := NewTensor(a.shape...)
-	for i := range a.data {
-		out.data[i] = a.data[i] * b.data[i]
-	}
-	return out
-}
+// Mul is defined in tensor.go - element-wise multiplication (Hadamard product)
 
 // ===========================================================================
 // COMPARISON: SwiGLU vs GELU Feed-Forward

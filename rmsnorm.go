@@ -82,11 +82,11 @@ func (rms *RMSNorm) Forward(x *Tensor) *Tensor {
 			val := x.At(i, j)
 			sumSquares += val * val
 		}
-		rms := math.Sqrt(sumSquares/float64(features) + rms.eps)
+		rmsValue := math.Sqrt(sumSquares/float64(features) + rms.eps)
 
 		// Scale by 1/RMS and apply learned gamma
 		for j := 0; j < features; j++ {
-			normalized := x.At(i, j) / rms
+			normalized := x.At(i, j) / rmsValue
 			scaled := normalized * rms.gamma.data[j]
 			out.Set(scaled, i, j)
 		}

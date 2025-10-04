@@ -80,10 +80,11 @@ This document outlines planned improvements and features for the project.
 
 ## Performance/Features
 
-- [ ] **Implement Proper Causal Masking**
-  - Currently implicit in generation
-  - Should be explicit in attention mechanism
-  - More correct architecturally
+- [x] **Implement Proper Causal Masking**
+  - ✅ Implemented as switchable option (`--use-explicit-mask`)
+  - Dynamic masking (default): faster, implicit, computed on-the-fly
+  - Explicit masking (optional): architecturally correct, uses pre-computed tensor
+  - Properly handles KV cache scenarios with fallback logic
 
 - [ ] **Gradient Accumulation**
   - Allow training with larger effective batch sizes

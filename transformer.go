@@ -92,9 +92,10 @@ type Config struct {
 	Dropout   float64 // Dropout probability
 
 	// Modern architectural improvements (switchable)
-	UseRoPE    bool // Use Rotary Position Embeddings instead of learned positional embeddings
-	UseSwiGLU  bool // Use SwiGLU activation in feed-forward instead of GELU
-	UseRMSNorm bool // Use RMSNorm instead of LayerNorm
+	UseRoPE          bool // Use Rotary Position Embeddings instead of learned positional embeddings
+	UseSwiGLU        bool // Use SwiGLU activation in feed-forward instead of GELU
+	UseRMSNorm       bool // Use RMSNorm instead of LayerNorm
+	UseExplicitMask bool // Use pre-computed explicit causal mask (more architecturally correct)
 }
 
 // DefaultConfig returns a small transformer configuration for testing.
@@ -135,6 +136,9 @@ type Attention struct {
 	// Causal mask for autoregressive generation
 	mask *Tensor
 
+	// Use explicit mask (switchable architecture option)
+	useExplicitMask bool
+
 	// Backend for accelerated operations (optional)
 	backend interface {
 		MatMul(*Tensor, *Tensor) (*Tensor, error)
@@ -150,7 +154,7 @@ type AttentionCollector struct {
 }
 
 // NewAttention creates a new attention layer.
-func NewAttention(embedDim, numHeads, seqLen int) *Attention {
+func NewAttention(embedDim, numHeads, seqLen int, useExplicitMask bool) *Attention {
 	if embedDim%numHeads != 0 {
 		panic(fmt.Sprintf("transformer: embedDim (%d) must be divisible by numHeads (%d)", embedDim, numHeads))
 	}
@@ -185,14 +189,15 @@ func NewAttention(embedDim, numHeads, seqLen int) *Attention {
 	}
 
 	return &Attention{
-		embedDim: embedDim,
-		numHeads: numHeads,
-		headDim:  headDim,
-		wq:       wq,
-		wk:       wk,
-		wv:       wv,
-		wo:       wo,
-		mask:     mask,
+		embedDim:        embedDim,
+		numHeads:        numHeads,
+		headDim:         headDim,
+		wq:              wq,
+		wk:              wk,
+		wv:              wv,
+		wo:              wo,
+		mask:            mask,
+		useExplicitMask: useExplicitMask,
 	}
 }
 
@@ -247,11 +252,37 @@ func (a *Attention) Forward(x *Tensor, cache *KVCache, layerIdx int, collector *
 	// When using cache: seqLen=1 (new token), scores shape is (1, cachedLen)
 	// Without cache: seqLen=full sequence, scores shape is (seqLen, seqLen)
 	totalLen := scores.shape[1] // Total sequence length (cached + new)
-	for i := 0; i < seqLen; i++ {
-		currentPos := totalLen - seqLen + i // Position in full sequence
-		for j := 0; j < totalLen; j++ {
-			if j > currentPos {
-				scores.Set(-1e9, i, j)
+
+	if a.useExplicitMask {
+		// USE EXPLICIT MASK: Use pre-computed mask tensor
+		// This is architecturally more correct and makes causality explicit
+		maskSeqLen := a.mask.shape[0]
+		for i := 0; i < seqLen; i++ {
+			currentPos := totalLen - seqLen + i // Position in full sequence
+			for j := 0; j < totalLen; j++ {
+				// Use pre-computed mask where available, fall back to dynamic for cache
+				if currentPos < maskSeqLen && j < maskSeqLen {
+					// Use explicit mask: 1.0 = attend, 0.0 = mask
+					if a.mask.At(currentPos, j) == 0.0 {
+						scores.Set(-1e9, i, j)
+					}
+				} else {
+					// Beyond mask bounds (KV cache), use dynamic masking
+					if j > currentPos {
+						scores.Set(-1e9, i, j)
+					}
+				}
+			}
+		}
+	} else {
+		// USE DYNAMIC MASK (default): Compute mask on the fly
+		// This is faster but less explicit
+		for i := 0; i < seqLen; i++ {
+			currentPos := totalLen - seqLen + i // Position in full sequence
+			for j := 0; j < totalLen; j++ {
+				if j > currentPos {
+					scores.Set(-1e9, i, j)
+				}
 			}
 		}
 	}
@@ -447,7 +478,7 @@ type TransformerBlock struct {
 // NewTransformerBlock creates a transformer block.
 func NewTransformerBlock(config Config) *TransformerBlock {
 	block := &TransformerBlock{
-		attn:   NewAttention(config.EmbedDim, config.NumHeads, config.SeqLen),
+		attn:   NewAttention(config.EmbedDim, config.NumHeads, config.SeqLen, config.UseExplicitMask),
 		config: config,
 	}
 

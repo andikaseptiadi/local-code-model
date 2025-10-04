@@ -102,6 +102,7 @@ func RunTrainCommand(args []string) error {
 	useRoPE := fs.Bool("use-rope", false, "Use RoPE (Rotary Position Embeddings) instead of learned positional embeddings")
 	useSwiGLU := fs.Bool("use-swiglu", false, "Use SwiGLU activation in feed-forward layers instead of GELU")
 	useRMSNorm := fs.Bool("use-rmsnorm", false, "Use RMSNorm instead of LayerNorm for normalization")
+	useExplicitMask := fs.Bool("use-explicit-mask", false, "Use explicit pre-computed causal mask (more architecturally correct)")
 
 	// I/O
 	dataDir := fs.String("data", ".", "Directory containing .go files for training")
@@ -128,7 +129,7 @@ func RunTrainCommand(args []string) error {
 	fmt.Printf("Tokenizer: %s\n", *tokenizerType)
 
 	// Print architecture options if any modern improvements are enabled
-	if *useRoPE || *useSwiGLU || *useRMSNorm {
+	if *useRoPE || *useSwiGLU || *useRMSNorm || *useExplicitMask {
 		fmt.Println("Architecture:")
 		if *useRoPE {
 			fmt.Println("  ✓ RoPE (Rotary Position Embeddings)")
@@ -138,6 +139,9 @@ func RunTrainCommand(args []string) error {
 		}
 		if *useRMSNorm {
 			fmt.Println("  ✓ RMSNorm normalization")
+		}
+		if *useExplicitMask {
+			fmt.Println("  ✓ Explicit causal masking")
 		}
 	}
 	fmt.Println()
@@ -175,16 +179,17 @@ func RunTrainCommand(args []string) error {
 	// Step 4: Initialize model
 	fmt.Println("Step 4: Initializing model")
 	config := Config{
-		VocabSize:  tokenizer.VocabSize(),
-		SeqLen:     *seqLen,
-		EmbedDim:   *embedDim,
-		NumLayers:  *numLayers,
-		NumHeads:   *numHeads,
-		FFHidden:   *embedDim * 4, // Standard GPT ratio (4x embed dim)
-		Dropout:    0.1,           // Light dropout for regularization
-		UseRoPE:    *useRoPE,
-		UseSwiGLU:  *useSwiGLU,
-		UseRMSNorm: *useRMSNorm,
+		VocabSize:       tokenizer.VocabSize(),
+		SeqLen:          *seqLen,
+		EmbedDim:        *embedDim,
+		NumLayers:       *numLayers,
+		NumHeads:        *numHeads,
+		FFHidden:        *embedDim * 4, // Standard GPT ratio (4x embed dim)
+		Dropout:         0.1,           // Light dropout for regularization
+		UseRoPE:         *useRoPE,
+		UseSwiGLU:       *useSwiGLU,
+		UseRMSNorm:      *useRMSNorm,
+		UseExplicitMask: *useExplicitMask,
 	}
 	model := NewGPT(config)
 	params := model.Parameters()
