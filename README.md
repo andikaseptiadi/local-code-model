@@ -213,6 +213,18 @@ Example:
 
 This codebase is designed to be read like a textbook. See **[LEARNING.md](LEARNING.md)** for a comprehensive guided tour through the code.
 
+### Interactive Notebooks
+
+For hands-on learning, try the **[Jupyter notebooks](notebooks/)** - interactive tutorials using gophernotes (Go kernel):
+
+1. **[Tensor Basics](notebooks/01-tensor-basics.ipynb)** - Learn tensor operations, matrix multiplication, and activation functions
+2. **[Attention Mechanism](notebooks/02-attention-mechanism.ipynb)** - Build self-attention from scratch with Q, K, V projections
+3. **[Training a Transformer](notebooks/03-training-transformer.ipynb)** - Train a complete model end-to-end
+
+See [notebooks/README.md](notebooks/README.md) for setup instructions (requires Jupyter + gophernotes).
+
+### Code Reading Order
+
 **Recommended reading order:**
 1. `tensor.go` - Multi-dimensional arrays (like NumPy)
 2. `autograd.go` - Automatic differentiation for backpropagation

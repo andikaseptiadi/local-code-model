@@ -38,15 +38,16 @@ This document outlines planned improvements and features for the project.
 
 ## Medium Term (Next 3 Months)
 
-- [ ] **BPE Tokenizer Implementation**
-  - Replace character-level with proper BPE
+- [x] **BPE Tokenizer Implementation**
+  - Byte-level BPE with merge rules
   - Better vocabulary efficiency
   - More realistic training
+  - Supports both BPE and character-level tokenization
 
-- [ ] **Interactive Notebooks/Tutorials**
-  - Create Jupyter notebooks (using gophernotes)
-  - Step-by-step tutorials for each component
-  - Make it easier to experiment
+- [x] **Interactive Notebooks/Tutorials**
+  - Created Jupyter notebooks (using gophernotes)
+  - Step-by-step tutorials for tensors, attention, and training
+  - Available in `notebooks/` directory
 
 - [ ] **Implement Modern Architectural Improvements**
   - RoPE (Rotary Position Embeddings)
