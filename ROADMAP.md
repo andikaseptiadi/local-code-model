@@ -100,6 +100,14 @@ This document outlines planned improvements and features for the project.
   - Pure Go, no external dependencies
   - Demonstrates Go concurrency patterns for ML workloads
 
+- [x] **Reusable Worker Pool for Batch Operations**
+  - ✅ Implemented in `tensor_pool.go`
+  - Persistent worker pool with task queue (avoids goroutine creation overhead)
+  - Batch tensor operations (BatchMatMul, BatchMatMulParallel)
+  - Graceful shutdown with Wait() and Stop()
+  - ~300ns task submission overhead (amortized across training iterations)
+  - Ideal for training loops processing batches repeatedly
+
 - [ ] **Add More Architecture Variants**
   - BERT-style (bidirectional)
   - Encoder-decoder (T5-style)

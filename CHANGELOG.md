@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Alternative channel-based work queue pattern
   - Comprehensive tests and benchmarks
   - Pure Go implementation, no external dependencies
+- Reusable worker pool for batch operations (`tensor_pool.go`)
+  - Persistent worker pool with task queue (avoids goroutine creation overhead)
+  - Batch tensor operations (BatchMatMul, BatchMatMulParallel)
+  - Graceful shutdown with Wait() and Stop()
+  - ~300ns task submission overhead (amortized across training iterations)
+  - Ideal for training loops processing batches repeatedly
 
 ### Fixed
 - Training loop batch data structuring
