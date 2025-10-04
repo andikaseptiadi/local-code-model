@@ -93,9 +93,10 @@ import (
 // TrainingConfig holds hyperparameters for training.
 type TrainingConfig struct {
 	// Optimization
-	LearningRate      float64
-	WeightDecay       float64 // L2 regularization
-	GradientClipValue float64 // Clip gradients to prevent explosion
+	LearningRate       float64
+	WeightDecay        float64 // L2 regularization
+	GradientClipValue  float64 // Clip gradients to prevent explosion
+	GradAccumSteps     int     // Gradient accumulation steps (default: 1 = no accumulation)
 
 	// Training
 	BatchSize int
@@ -125,9 +126,10 @@ type TrainingConfig struct {
 func DefaultTrainingConfig() TrainingConfig {
 	return TrainingConfig{
 		// Optimization
-		LearningRate:      3e-4, // GPT-3 uses 6e-4, we use smaller for stability
-		WeightDecay:       0.01,
-		GradientClipValue: 1.0,
+		LearningRate:       3e-4, // GPT-3 uses 6e-4, we use smaller for stability
+		WeightDecay:        0.01,
+		GradientClipValue:  1.0,
+		GradAccumSteps:     1, // No accumulation by default
 
 		// Training
 		BatchSize: 32,
@@ -373,10 +375,78 @@ func CrossEntropyLoss(logits *Tensor, targets []int) float64 {
 }
 
 // TrainStep performs a single training step.
+//
+// For gradient accumulation support, use TrainStepWithGradAccum instead.
 func TrainStep(model *GPT, batch [][]int, targets [][]int, optimizer Optimizer, lr float64) float64 {
-	// Zero gradients
+	return TrainStepWithGradAccum(model, batch, targets, optimizer, lr, 1, true, true)
+}
+
+// TrainStepWithGradAccum performs a training step with gradient accumulation support.
+//
+// ===========================================================================
+// WHAT IS GRADIENT ACCUMULATION?
+// ===========================================================================
+//
+// Gradient accumulation allows training with larger effective batch sizes
+// than what fits in memory. Instead of updating after each batch, we:
+//   1. Accumulate gradients over multiple small batches
+//   2. Update parameters once after N accumulation steps
+//
+// INTUITION:
+// Imagine you want batch size 64 but only have memory for batch size 16.
+// With gradient accumulation (accumSteps=4):
+//   - Process 4 batches of size 16
+//   - Accumulate gradients (sum them up)
+//   - Update once with effective batch size 64
+//
+// WHY THIS WORKS:
+// Gradients are additive. Computing:
+//   grad(loss(batch1) + loss(batch2))
+// Is the same as:
+//   grad(loss(batch1)) + grad(loss(batch2))
+//
+// BENEFITS:
+//   ✓ Train with larger batch sizes on limited memory
+//   ✓ More stable gradients (larger effective batch)
+//   ✓ Same convergence as native large batch
+//   ✓ No accuracy loss
+//
+// TRADE-OFFS:
+//   ✗ Slower training (more forward/backward passes per update)
+//   ✗ Longer time to convergence (fewer parameter updates per epoch)
+//
+// USAGE:
+//   accumSteps = 1: No accumulation (normal training)
+//   accumSteps = 4: Accumulate 4 batches before update
+//   accumSteps = 8: Accumulate 8 batches before update
+//
+// PARAMETERS:
+//   - model: The model to train
+//   - batch: Current batch of inputs
+//   - targets: Current batch of targets
+//   - optimizer: Optimizer (SGD, Adam, etc.)
+//   - lr: Current learning rate
+//   - accumSteps: Number of steps to accumulate gradients
+//   - shouldUpdate: Whether to perform optimizer step (true on last accumulation step)
+//
+// EXAMPLE:
+//   // Accumulate over 4 steps
+//   for step := 0; step < 4; step++ {
+//       shouldUpdate := (step == 3) // Update on last step
+//       loss := TrainStepWithGradAccum(model, batch, targets, opt, lr, 4, shouldUpdate)
+//   }
+//
+// ===========================================================================
+func TrainStepWithGradAccum(model *GPT, batch [][]int, targets [][]int,
+	optimizer Optimizer, lr float64, accumSteps int, shouldZero bool, shouldUpdate bool) float64 {
+
 	params := model.Parameters()
-	optimizer.ZeroGrad(params)
+
+	// Zero gradients only on first accumulation step
+	// (subsequent steps will add to existing gradients)
+	if shouldZero {
+		optimizer.ZeroGrad(params)
+	}
 
 	// Forward pass (accumulate loss over batch)
 	totalLoss := 0.0
@@ -394,14 +464,27 @@ func TrainStep(model *GPT, batch [][]int, targets [][]int, optimizer Optimizer, 
 		model.Backward(gradLogits, cache)
 	}
 
-	// Average loss
+	// Average loss over current batch
 	avgLoss := totalLoss / float64(len(batch))
 
-	// Gradient clipping (prevent explosion)
-	clipGradients(params, 1.0)
+	// Scale gradients by 1/accumSteps to maintain correct effective batch size
+	// Without this, accumulated gradients would be accumSteps times too large
+	if accumSteps > 1 {
+		for _, p := range params {
+			for j := range p.grad {
+				p.grad[j] /= float64(accumSteps)
+			}
+		}
+	}
 
-	// Optimizer step
-	optimizer.Step(params, lr)
+	// Only update parameters on the last accumulation step
+	if shouldUpdate {
+		// Gradient clipping (prevent explosion)
+		clipGradients(params, 1.0)
+
+		// Optimizer step
+		optimizer.Step(params, lr)
+	}
 
 	return avgLoss
 }

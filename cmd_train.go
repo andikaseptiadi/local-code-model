@@ -97,6 +97,7 @@ func RunTrainCommand(args []string) error {
 	epochs := fs.Int("epochs", 2, "Number of training epochs")
 	batchSize := fs.Int("batch", 4, "Batch size")
 	lr := fs.Float64("lr", 0.001, "Learning rate")
+	gradAccumSteps := fs.Int("grad-accum-steps", 1, "Gradient accumulation steps (effective batch size = batch * grad-accum-steps)")
 
 	// Architecture options (modern improvements)
 	useRoPE := fs.Bool("use-rope", false, "Use RoPE (Rotary Position Embeddings) instead of learned positional embeddings")
@@ -210,6 +211,10 @@ func RunTrainCommand(args []string) error {
 
 	// Step 6: Train!
 	fmt.Println("Step 6: Training...")
+	if *gradAccumSteps > 1 {
+		fmt.Printf("  Using gradient accumulation: %d steps (effective batch size: %d)\n",
+			*gradAccumSteps, *batchSize**gradAccumSteps)
+	}
 	fmt.Println("-------------------------------------------------------------------")
 	globalStep := 0
 	for epoch := 0; epoch < *epochs; epoch++ {
@@ -230,10 +235,19 @@ func RunTrainCommand(args []string) error {
 				}
 			}
 
-			loss := TrainStep(model, inputs, targets, optimizer, currentLR)
+			// Determine whether to zero gradients and update parameters
+			// For gradient accumulation:
+			// - Zero gradients on first step of accumulation cycle (accumStepIdx == 0)
+			// - Update parameters on last step of accumulation cycle (accumStepIdx == gradAccumSteps-1)
+			accumStepIdx := batchIdx % *gradAccumSteps
+			shouldZero := accumStepIdx == 0
+			shouldUpdate := accumStepIdx == *gradAccumSteps-1
+
+			loss := TrainStepWithGradAccum(model, inputs, targets, optimizer, currentLR,
+				*gradAccumSteps, shouldZero, shouldUpdate)
 			epochLoss += loss
 
-			// Record metrics if tracker is enabled
+			// Record metrics if tracker is enabled (record every batch, even during accumulation)
 			if metrics != nil {
 				metrics.Record(globalStep, loss, currentLR, epoch, batchIdx)
 			}

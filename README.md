@@ -217,6 +217,7 @@ This project supports switchable architecture improvements that let you compare 
   -epochs 2 \           # Training epochs
   -batch 4 \            # Batch size
   -lr 0.001 \           # Learning rate
+  -grad-accum-steps 1 \ # Gradient accumulation steps (default: 1)
   -data . \             # Directory with .go files
   -model model.bin \    # Output model path
   -tokenizer tok.bin \  # Output tokenizer path

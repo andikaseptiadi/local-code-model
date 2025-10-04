@@ -86,9 +86,11 @@ This document outlines planned improvements and features for the project.
   - Explicit masking (optional): architecturally correct, uses pre-computed tensor
   - Properly handles KV cache scenarios with fallback logic
 
-- [ ] **Gradient Accumulation**
-  - Allow training with larger effective batch sizes
+- [x] **Gradient Accumulation**
+  - ✅ Implemented as switchable option (`--grad-accum-steps`)
+  - Allows training with larger effective batch sizes (effective batch = batch × accum steps)
   - Important for memory-constrained environments
+  - Default: 1 (no accumulation)
 
 - [ ] **Add More Architecture Variants**
   - BERT-style (bidirectional)

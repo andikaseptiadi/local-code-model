@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Byte-Pair Encoding (BPE) tokenizer support via `--tokenizer-type bpe`
 - KV cache for efficient inference
 - Interactive Jupyter notebooks for hands-on learning
+- Gradient accumulation via `--grad-accum-steps` flag for training with larger effective batch sizes
 
 ### Fixed
 - Training loop batch data structuring
