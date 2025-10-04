@@ -90,6 +90,11 @@ type Config struct {
 	NumLayers int     // Number of transformer blocks
 	FFHidden  int     // Feed-forward hidden dimension (typically 4 * EmbedDim)
 	Dropout   float64 // Dropout probability
+
+	// Modern architectural improvements (switchable)
+	UseRoPE    bool // Use Rotary Position Embeddings instead of learned positional embeddings
+	UseSwiGLU  bool // Use SwiGLU activation in feed-forward instead of GELU
+	UseRMSNorm bool // Use RMSNorm instead of LayerNorm
 }
 
 // DefaultConfig returns a small transformer configuration for testing.
@@ -417,21 +422,55 @@ func (ff *FeedForward) Forward(x *Tensor) *Tensor {
 //	x = x + FeedForward(LayerNorm(x))
 //
 // The residual connections (x + ...) are crucial for training deep networks.
+//
+// SWITCHABLE ARCHITECTURE:
+// This block supports both classical and modern variants:
+//   - LayerNorm vs RMSNorm (config.UseRMSNorm)
+//   - GELU vs SwiGLU feed-forward (config.UseSwiGLU)
 type TransformerBlock struct {
 	attn *Attention
-	ln1  *LayerNorm
-	ff   *FeedForward
-	ln2  *LayerNorm
+
+	// Normalization layers (one of these will be used based on config)
+	ln1     *LayerNorm
+	ln2     *LayerNorm
+	rmsLn1  *RMSNorm
+	rmsLn2  *RMSNorm
+
+	// Feed-forward layers (one of these will be used based on config)
+	ff       *FeedForward
+	ffSwiGLU *SwiGLUFeedForward
+
+	// Config for determining which components to use
+	config Config
 }
 
 // NewTransformerBlock creates a transformer block.
 func NewTransformerBlock(config Config) *TransformerBlock {
-	return &TransformerBlock{
-		attn: NewAttention(config.EmbedDim, config.NumHeads, config.SeqLen),
-		ln1:  NewLayerNorm(config.EmbedDim),
-		ff:   NewFeedForward(config.EmbedDim, config.FFHidden),
-		ln2:  NewLayerNorm(config.EmbedDim),
+	block := &TransformerBlock{
+		attn:   NewAttention(config.EmbedDim, config.NumHeads, config.SeqLen),
+		config: config,
 	}
+
+	// Initialize normalization layers based on config
+	if config.UseRMSNorm {
+		block.rmsLn1 = NewRMSNorm(config.EmbedDim)
+		block.rmsLn2 = NewRMSNorm(config.EmbedDim)
+	} else {
+		block.ln1 = NewLayerNorm(config.EmbedDim)
+		block.ln2 = NewLayerNorm(config.EmbedDim)
+	}
+
+	// Initialize feed-forward layer based on config
+	if config.UseSwiGLU {
+		// SwiGLU uses ~2/3 hidden dim for same parameter count
+		// (since it has two parallel projections)
+		swiGLUHidden := (config.FFHidden * 2) / 3
+		block.ffSwiGLU = NewSwiGLUFeedForward(config.EmbedDim, swiGLUHidden)
+	} else {
+		block.ff = NewFeedForward(config.EmbedDim, config.FFHidden)
+	}
+
+	return block
 }
 
 // Forward applies the transformer block.
@@ -446,13 +485,31 @@ func (tb *TransformerBlock) Forward(x *Tensor, cache *KVCache, layerIdx int) *Te
 // This is used for visualization - normal forward passes use Forward() with collector=nil.
 func (tb *TransformerBlock) ForwardWithCollector(x *Tensor, cache *KVCache, layerIdx int, collector *AttentionCollector) *Tensor {
 	// Self-attention with residual connection
-	normed := tb.ln1.Forward(x)
+	// Use RMSNorm or LayerNorm based on config
+	var normed *Tensor
+	if tb.config.UseRMSNorm {
+		normed = tb.rmsLn1.Forward(x)
+	} else {
+		normed = tb.ln1.Forward(x)
+	}
 	attended := tb.attn.Forward(normed, cache, layerIdx, collector)
 	x = Add(x, attended)
 
 	// Feed-forward with residual connection
-	normed = tb.ln2.Forward(x)
-	ff := tb.ff.Forward(normed)
+	// Use RMSNorm or LayerNorm based on config
+	if tb.config.UseRMSNorm {
+		normed = tb.rmsLn2.Forward(x)
+	} else {
+		normed = tb.ln2.Forward(x)
+	}
+
+	// Use SwiGLU or standard feed-forward based on config
+	var ff *Tensor
+	if tb.config.UseSwiGLU {
+		ff = tb.ffSwiGLU.Forward(normed)
+	} else {
+		ff = tb.ff.Forward(normed)
+	}
 	x = Add(x, ff)
 
 	return x
@@ -461,23 +518,28 @@ func (tb *TransformerBlock) ForwardWithCollector(x *Tensor, cache *KVCache, laye
 // GPT implements a GPT-style transformer language model.
 //
 // Architecture:
-//  1. Token + positional embeddings
+//  1. Token + positional embeddings (or RoPE)
 //  2. Stack of transformer blocks
-//  3. Final layer norm
+//  3. Final layer norm (or RMSNorm)
 //  4. Linear projection to vocabulary logits
+//
+// SWITCHABLE ARCHITECTURE:
+//   - Learned positional embeddings vs RoPE (config.UseRoPE)
+//   - LayerNorm vs RMSNorm for final norm (config.UseRMSNorm)
 type GPT struct {
 	config Config
 
 	// Embeddings
 	tokenEmbed *Tensor // (vocabSize, embedDim)
-	posEmbed   *Tensor // (seqLen, embedDim)
+	posEmbed   *Tensor // (seqLen, embedDim) - only used if !UseRoPE
 
 	// Transformer blocks
 	blocks []*TransformerBlock
 
-	// Output
-	lnFinal *LayerNorm
-	lmHead  *Tensor // (embedDim, vocabSize) - language model head
+	// Output normalization (one of these will be used)
+	lnFinal     *LayerNorm
+	rmsFinal    *RMSNorm
+	lmHead      *Tensor // (embedDim, vocabSize) - language model head
 
 	// Backend for accelerated matrix operations
 	// If nil, uses naive MatMul from tensor.go

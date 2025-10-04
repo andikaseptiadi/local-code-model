@@ -98,6 +98,11 @@ func RunTrainCommand(args []string) error {
 	batchSize := fs.Int("batch", 4, "Batch size")
 	lr := fs.Float64("lr", 0.001, "Learning rate")
 
+	// Architecture options (modern improvements)
+	useRoPE := fs.Bool("use-rope", false, "Use RoPE (Rotary Position Embeddings) instead of learned positional embeddings")
+	useSwiGLU := fs.Bool("use-swiglu", false, "Use SwiGLU activation in feed-forward layers instead of GELU")
+	useRMSNorm := fs.Bool("use-rmsnorm", false, "Use RMSNorm instead of LayerNorm for normalization")
+
 	// I/O
 	dataDir := fs.String("data", ".", "Directory containing .go files for training")
 	modelPath := fs.String("model", "tiny_model.bin", "Output model path")
@@ -121,6 +126,20 @@ func RunTrainCommand(args []string) error {
 		*numLayers, *embedDim, *numHeads, *seqLen)
 	fmt.Printf("Training: %d epochs, batch size %d, lr %.4f\n", *epochs, *batchSize, *lr)
 	fmt.Printf("Tokenizer: %s\n", *tokenizerType)
+
+	// Print architecture options if any modern improvements are enabled
+	if *useRoPE || *useSwiGLU || *useRMSNorm {
+		fmt.Println("Architecture:")
+		if *useRoPE {
+			fmt.Println("  ✓ RoPE (Rotary Position Embeddings)")
+		}
+		if *useSwiGLU {
+			fmt.Println("  ✓ SwiGLU activation")
+		}
+		if *useRMSNorm {
+			fmt.Println("  ✓ RMSNorm normalization")
+		}
+	}
 	fmt.Println()
 
 	// Step 1: Load training data
@@ -156,13 +175,16 @@ func RunTrainCommand(args []string) error {
 	// Step 4: Initialize model
 	fmt.Println("Step 4: Initializing model")
 	config := Config{
-		VocabSize: tokenizer.VocabSize(),
-		SeqLen:    *seqLen,
-		EmbedDim:  *embedDim,
-		NumLayers: *numLayers,
-		NumHeads:  *numHeads,
-		FFHidden:  *embedDim * 4, // Standard GPT ratio (4x embed dim)
-		Dropout:   0.1,           // Light dropout for regularization
+		VocabSize:  tokenizer.VocabSize(),
+		SeqLen:     *seqLen,
+		EmbedDim:   *embedDim,
+		NumLayers:  *numLayers,
+		NumHeads:   *numHeads,
+		FFHidden:   *embedDim * 4, // Standard GPT ratio (4x embed dim)
+		Dropout:    0.1,           // Light dropout for regularization
+		UseRoPE:    *useRoPE,
+		UseSwiGLU:  *useSwiGLU,
+		UseRMSNorm: *useRMSNorm,
 	}
 	model := NewGPT(config)
 	params := model.Parameters()

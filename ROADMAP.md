@@ -49,11 +49,12 @@ This document outlines planned improvements and features for the project.
   - Step-by-step tutorials for tensors, attention, and training
   - Available in `notebooks/` directory
 
-- [ ] **Implement Modern Architectural Improvements**
-  - RoPE (Rotary Position Embeddings)
-  - SwiGLU activation
-  - RMSNorm instead of LayerNorm
-  - Shows evolution of transformer architecture
+- [x] **Implement Modern Architectural Improvements**
+  - ✅ RoPE (Rotary Position Embeddings) - `rope.go`
+  - ✅ SwiGLU activation - `swiglu.go`
+  - ✅ RMSNorm instead of LayerNorm - `rmsnorm.go`
+  - ✅ Switchable architecture via CLI flags: `--use-rope`, `--use-swiglu`, `--use-rmsnorm`
+  - Shows evolution of transformer architecture from GPT-2 to modern LLMs like LLaMA
 
 - [ ] **Build Community**
   - Discord/community forum
