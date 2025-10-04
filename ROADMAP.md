@@ -92,6 +92,14 @@ This document outlines planned improvements and features for the project.
   - Important for memory-constrained environments
   - Default: 1 (no accumulation)
 
+- [x] **Parallel Matrix Multiplication with Goroutines**
+  - ✅ Implemented in `tensor_parallel.go`
+  - Row-parallel strategy using goroutines and WaitGroups
+  - Alternative channel-based work queue pattern
+  - 3-8x speedup on multi-core machines (tested: 8.75x on M4 Max)
+  - Pure Go, no external dependencies
+  - Demonstrates Go concurrency patterns for ML workloads
+
 - [ ] **Add More Architecture Variants**
   - BERT-style (bidirectional)
   - Encoder-decoder (T5-style)

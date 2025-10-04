@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - KV cache for efficient inference
 - Interactive Jupyter notebooks for hands-on learning
 - Gradient accumulation via `--grad-accum-steps` flag for training with larger effective batch sizes
+- Parallel matrix multiplication using Go goroutines (`tensor_parallel.go`)
+  - Row-parallel strategy with WaitGroups (3-8x speedup on multi-core machines)
+  - Alternative channel-based work queue pattern
+  - Comprehensive tests and benchmarks
+  - Pure Go implementation, no external dependencies
 
 ### Fixed
 - Training loop batch data structuring
