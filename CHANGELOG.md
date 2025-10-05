@@ -191,6 +191,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Embedding analysis with PCA and t-SNE
     - Generation quality metrics (diversity, repetition detection)
     - Model comparison framework with side-by-side evaluation
+  - Performance optimization guide (`docs/optimization-guide.md`)
+    - Memory optimizations (mixed precision, gradient checkpointing, Flash Attention, KV cache)
+    - Compute optimizations (parallel MatMul, blocked MatMul, SIMD vectorization)
+    - Training optimizations (gradient accumulation, learning rate scheduling)
+    - Inference optimizations (batch inference, model quantization)
+    - Hardware-specific tuning for CPU/GPU
+    - Complete optimization workflow with profiling, benchmarking, validation
+    - Optimization cheat sheet with recommended starting configurations
 
 ### Fixed
 - Training loop batch data structuring
