@@ -184,6 +184,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Generation issues (temperature sampling, repetition penalty, top-k/top-p)
     - Implementation bugs (dimension mismatches, masking errors, gradient flow)
     - Quick debugging checklist
+  - Model evaluation and analysis guide (`docs/evaluation-guide.md`)
+    - Perplexity computation and interpretation for all architectures
+    - Token-level accuracy metrics for BERT
+    - Attention visualization and pattern analysis
+    - Embedding analysis with PCA and t-SNE
+    - Generation quality metrics (diversity, repetition detection)
+    - Model comparison framework with side-by-side evaluation
 
 ### Fixed
 - Training loop batch data structuring
