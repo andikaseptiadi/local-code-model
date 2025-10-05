@@ -124,15 +124,15 @@ This document outlines planned improvements and features for the project.
   - Global pool pattern (GetPooledTensor, PutPooledTensor, WithPooledTensor)
   - Comprehensive tests and benchmarks demonstrating GC reduction
 
-- [ ] **Add More Architecture Variants**
-  - BERT-style (bidirectional)
-  - Encoder-decoder (T5-style)
-  - Shows different transformer architectures
+- [x] **Add More Architecture Variants**
+  - ✅ BERT-style (bidirectional) - `transformer_bert.go` and `transformer_bert_test.go`
+  - ✅ Encoder-decoder (T5-style) - `transformer_t5.go` and `transformer_t5_test.go`
+  - Shows different transformer architectures with comprehensive educational tests
 
-- [ ] **Implement Common Optimizations**
-  - Mixed precision training
-  - Gradient checkpointing
-  - Flash Attention (educational implementation)
+- [x] **Implement Common Optimizations**
+  - ✅ Mixed precision training - `tensor_mixed_precision.go` and tests
+  - ✅ Gradient checkpointing - `tensor_gradient_checkpoint.go` and tests
+  - ✅ Flash Attention (educational implementation) - `tensor_flash_attention.go` and tests
 
 ## Advanced Features
 

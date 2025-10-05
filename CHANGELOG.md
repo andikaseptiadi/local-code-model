@@ -55,6 +55,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Global pool pattern (GetPooledTensor, PutPooledTensor, WithPooledTensor)
   - Comprehensive tests and benchmarks demonstrating GC reduction
   - Educational implementation explaining object pooling and GC optimization
+- Phase 1.5 SIMD and hand-optimized operations (educational implementations)
+  - Tier 1: Basic SIMD framework (`tensor_simd.go`)
+    - Vectorized dot product API with architecture dispatch
+    - Pure Go fallback for portability
+    - Comprehensive educational comments on SIMD concepts
+    - Tests demonstrating correctness across vector sizes
+  - Tier 2: Hand-optimized matrix operations (`tensor_simd_tier2.go`)
+    - Loop unrolling (2x, 4x, 8x) for dot product (1.3-1.5x speedup)
+    - Register-tiled matrix-vector multiplication (1.8x speedup)
+    - Combined tiling + unrolling for maximum performance
+    - Educational comments on ILP, register pressure, cache behavior
+    - Comprehensive tests and benchmarks
+  - Tier 3: BLAS-style GEMM implementation (`tensor_simd_tier3.go`)
+    - Three-level panel decomposition (MC×NC, KC panels, MR×NR micro-kernels)
+    - 4×4 micro-kernel with full register accumulation
+    - Cache-aware blocking (L1/L2/L3 hierarchy)
+    - GEMM API: C = α·A·B + β·C with configurable scaling
+    - Educational implementation explaining BLAS algorithms
+    - Comprehensive tests verifying correctness against naive implementation
+- Phase 2.1: Mixed Precision Training (`tensor_mixed_precision.go`)
+  - Float16 (half precision) storage and conversions
+  - Float32ToFloat16/Float16ToFloat32 with overflow/underflow handling
+  - TensorFloat16 for memory-efficient forward passes (50% memory reduction)
+  - MixedPrecisionConfig for managing training workflow
+  - Loss scaling (default 1024x) to prevent gradient underflow
+  - Automatic gradient unscaling before optimizer step
+  - Master weights in float32, working copies in float16
+  - Overflow detection for dynamic loss scaling
+  - 75% memory footprint reduction demonstrated in tests
+  - Comprehensive test suite with float16 precision validation
+  - Educational implementation explaining mixed precision training concepts
+- Phase 2.2: Gradient Checkpointing (`tensor_gradient_checkpoint.go`)
+  - Activation checkpointing for memory-efficient training
+  - CheckpointFunction type for forward computations
+  - CheckpointSegment for managing checkpointed segments
+  - Automatic recomputation during backward pass
+  - CheckpointConfig for controlling checkpointing policy
+  - Memory savings estimation (K× reduction for CheckpointEveryN=K)
+  - Configurable checkpoint frequency (default: every 2 layers)
+  - Trade compute for memory (33% more FLOPs, 2-4× memory reduction)
+  - Comprehensive test suite with 13 tests covering all functionality
+  - Benchmark measuring recomputation overhead
+  - Educational implementation explaining gradient checkpointing concepts
+- Phase 2.3: Flash Attention (`tensor_flash_attention.go`)
+  - Memory-efficient attention via tiling and recomputation
+  - FlashAttentionConfig for configuring block size and causal masking
+  - FlashAttentionForward with multi-head support
+  - Tiled attention computation (keeps data in SRAM, reduces HBM accesses)
+  - Online softmax algorithm (incremental computation across tiles)
+  - StandardAttention reference implementation for comparison
+  - Memory reduction: O(N²) → O(N) for sequence length N
+  - HBM access reduction: O(N²) → O(N) reads/writes
+  - Configurable block sizes (32, 64, 128) for different cache hierarchies
+  - Causal masking support for autoregressive models
+  - 2-4× speedup in practice from memory bandwidth optimization
+  - Comprehensive test suite with 7 tests (correctness, causal masking, block sizes, long sequences, multi-head, numerical stability)
+  - Benchmarks for small (128 tokens) and large (512 tokens) sequences
+  - Educational implementation explaining Flash Attention algorithm, memory hierarchy, and online softmax
+- Phase 3.1: BERT-style Bidirectional Architecture (`transformer_bert.go`, `transformer_bert_test.go`)
+  - Bidirectional encoder-only transformer architecture
+  - BERTConfig with BERT-Base defaults (12 layers, 768 hidden dim, 12 heads)
+  - BERTForMaskedLM for masked language modeling (MLM) pretraining
+  - Bidirectional self-attention (can see both past and future context)
+  - MLM training objective: mask 15% of tokens, predict masked tokens
+  - Special token support: [CLS], [SEP], [MASK], [PAD]
+  - Token type embeddings for segment differentiation
+  - Position embeddings (learned absolute positions)
+  - Comprehensive test suite with 15+ tests covering:
+    - Config, model creation, forward pass, MLM head
+    - Random masking with proper 80/10/10 split
+    - Loss computation and gradient flow
+    - Educational comparison with GPT (BERT vs GPT architectures)
+    - Complete MLM training workflow demonstration
+  - 30-50% documentation coverage with educational focus
+  - Demonstrates bidirectional vs causal attention trade-offs
+- Phase 3.2: T5-style Encoder-Decoder Architecture (`transformer_t5.go`, `transformer_t5_test.go`)
+  - Full encoder-decoder transformer (text-to-text framework)
+  - T5Config with T5-Base defaults (12 encoder + 12 decoder layers)
+  - T5Encoder with bidirectional self-attention (like BERT encoder)
+  - T5Decoder with causal self-attention + cross-attention to encoder
+  - Cross-attention mechanism: decoder queries attend to encoder outputs
+  - Span corruption training objective (mask contiguous spans, not individual tokens)
+  - Relative position biases instead of absolute position embeddings
+  - Shared token embeddings between encoder and decoder
+  - Sentinel tokens (<extra_id_0>, etc.) for span boundaries
+  - Seq2seq loss computation for sequence-to-sequence tasks
+  - Comprehensive test suite with 15+ tests covering:
+    - Config, encoder, decoder, full model creation and forward passes
+    - Span corruption mechanism with configurable span length
+    - Cross-attention correctness and information flow
+    - Seq2seq loss computation and gradient flow
+    - Educational comparison: T5 vs GPT vs BERT architectures
+    - Complete encoder-decoder workflow demonstration
+  - 30-50% documentation coverage with educational focus
+  - Demonstrates encoder-decoder architecture for translation, summarization, QA tasks
+- Educational documentation and tutorials
+  - Comprehensive transformer architecture comparison guide (`docs/transformer-architectures.md`)
+    - Side-by-side comparison of GPT, BERT, and T5 architectures
+    - Attention mechanism deep dives (causal, bidirectional, cross-attention)
+    - Training objectives explained (next token prediction, MLM, span corruption)
+    - Use case selection guide with decision trees
+    - Performance considerations (memory, compute, latency)
+  - Interactive architecture comparison notebook (`notebooks/architecture-comparison.md`)
+    - Hands-on examples demonstrating each architecture
+    - Visual attention pattern diagrams
+    - Side-by-side task comparisons
+    - Practical exercises for learners
+  - Complete training workflows guide (`docs/training-workflows.md`)
+    - Step-by-step GPT training workflow (data prep, config, training loop, generation)
+    - Step-by-step BERT training workflow (masking, MLM, fine-tuning for classification)
+    - Step-by-step T5 training workflow (span corruption, seq2seq, fine-tuning for translation)
+    - Performance optimization techniques (gradient accumulation, mixed precision, checkpointing, flash attention)
+    - Training time and memory comparisons
+  - Mathematical foundations guide (`docs/transformer-mathematics.md`)
+    - Detailed attention mechanism mathematics with numerical examples
+    - Multi-head attention explanation with concrete values
+    - Position encoding mathematics (sinusoidal, learned, RoPE)
+    - Layer normalization and RMSNorm with worked examples
+    - Feed-forward networks and SwiGLU
+    - Backpropagation through transformers with gradient flow
+    - Complete forward pass walkthrough with tiny transformer example
+  - Troubleshooting guide (`docs/troubleshooting-guide.md`)
+    - NaN loss and gradient issues (exploding gradients, softmax instability, clipping)
+    - Poor convergence (learning rate schedules, model sizing, initialization)
+    - Memory issues (batch size, gradient checkpointing, vocabulary pruning)
+    - Slow training (optimization strategies, batching, parallelization)
+    - Generation issues (temperature sampling, repetition penalty, top-k/top-p)
+    - Implementation bugs (dimension mismatches, masking errors, gradient flow)
+    - Quick debugging checklist
 
 ### Fixed
 - Training loop batch data structuring
