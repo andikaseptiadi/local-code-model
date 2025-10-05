@@ -225,6 +225,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - SXM vs PCIe form factor comparison
     - Memory hierarchy impact on transformer performance
     - Decision framework and quick selection guide
+  - Model deployment and serving guide (`docs/model-deployment-guide.md`)
+    - Deployment patterns (single-instance, load-balanced multi-instance, microservices)
+    - Kubernetes deployment configurations with HPA (Horizontal Pod Autoscaler)
+    - Inference optimization (KV cache implementation, speculative decoding)
+    - Batching strategies (dynamic batching, continuous batching with PagedAttention)
+    - Model quantization (INT8/INT4 quantization with performance trade-offs)
+    - Serving architectures (microservices pattern with load balancing)
+    - Monitoring and observability (metrics, alerts, critical thresholds)
+    - Cost optimization (spot instances, auto-scaling, caching strategies)
+    - Production checklist and common pitfalls
 
 ### Fixed
 - Training loop batch data structuring
