@@ -205,12 +205,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - CUDA/cuBLAS implementation for NVIDIA (RTX 5090 with Tensor Cores)
     - Metal/MPS implementation for Apple Silicon (M4 Max with ANE)
     - ROCm/rocBLAS implementation for AMD GPUs
+    - AWS Trainium/Inferentia2 custom AI accelerators (NeuronCore, NeuronLink)
+    - Google TPU v4/v5e/v5p (MXU systolic arrays, ICI, TPU Pods)
+    - Azure Maia 100 AI accelerator (preview status, integration patterns)
+    - Complete accelerator comparison and decision matrix
     - Mapping CPU optimizations to GPU equivalents (parallel MatMul, SIMD, mixed precision)
     - Single and multi-GPU training workflows (data parallelism, model parallelism)
     - Batch inference (throughput) vs low-latency inference (ANE)
     - Flash Attention on GPU with Tensor Core acceleration
     - Benchmarking methodology (nvidia-smi, rocm-smi, powermetrics, nsys)
-    - Hardware-specific optimization recommendations
+    - Hardware-specific optimization recommendations with cost analysis
 
 ### Fixed
 - Training loop batch data structuring
