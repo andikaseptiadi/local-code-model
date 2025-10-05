@@ -215,6 +215,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Flash Attention on GPU with Tensor Core acceleration
     - Benchmarking methodology (nvidia-smi, rocm-smi, powermetrics, nsys)
     - Hardware-specific optimization recommendations with cost analysis
+  - NVIDIA GPU selection guide (`docs/nvidia-gpu-guide.md`)
+    - Complete NVIDIA GPU lineup overview (L4, L40S, A10, A100, H100, H200, B100, B200)
+    - Workload-specific recommendations (training vs inference, model size, context length)
+    - October 2025 cloud pricing comparison (AWS, GCP, Azure, specialized providers)
+    - Training workload guidance by model size (<100M to 400B+ parameters)
+    - Inference workload guidance (low-latency, high-throughput, large models)
+    - TCO analysis (cloud vs on-premises hardware purchase)
+    - SXM vs PCIe form factor comparison
+    - Memory hierarchy impact on transformer performance
+    - Decision framework and quick selection guide
 
 ### Fixed
 - Training loop batch data structuring
