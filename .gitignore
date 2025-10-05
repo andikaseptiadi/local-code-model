@@ -41,3 +41,4 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+training_example_output.txt

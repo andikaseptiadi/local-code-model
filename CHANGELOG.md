@@ -235,6 +235,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Monitoring and observability (metrics, alerts, critical thresholds)
     - Cost optimization (spot instances, auto-scaling, caching strategies)
     - Production checklist and common pitfalls
+  - Data preparation and preprocessing guide (`docs/data-preparation-guide.md`)
+    - Data collection from public datasets (The Pile, Common Crawl, Wikipedia, Books, Code)
+    - Text cleaning and normalization (HTML removal, Unicode normalization, whitespace handling)
+    - Tokenization strategies (character-level, word-level, BPE, WordPiece, SentencePiece)
+    - Complete BPE tokenizer implementation with training, encoding, and vocabulary management
+    - Dataset construction for GPT, BERT, and T5 architectures
+    - Data quality filtering (heuristics for gibberish, spam, and low-quality content detection)
+    - Deduplication (exact and near-duplicate detection using MinHash and LSH)
+    - Data augmentation techniques (synonym replacement, back-translation, random operations)
+    - Train/validation/test splitting strategies (random and temporal splits)
+    - Efficient data loading and batching with Go implementations
+    - End-to-end production pipeline orchestrating all preprocessing steps
 
 ### Fixed
 - Training loop batch data structuring
