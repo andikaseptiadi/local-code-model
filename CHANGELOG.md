@@ -199,6 +199,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Hardware-specific tuning for CPU/GPU
     - Complete optimization workflow with profiling, benchmarking, validation
     - Optimization cheat sheet with recommended starting configurations
+  - GPU acceleration guide (`docs/gpu-acceleration-guide.md`)
+    - GPU architecture overview (CUDA, Metal, ROCm) and hardware comparison
+    - CPU vs GPU decision framework with specific thresholds
+    - CUDA/cuBLAS implementation for NVIDIA (RTX 5090 with Tensor Cores)
+    - Metal/MPS implementation for Apple Silicon (M4 Max with ANE)
+    - ROCm/rocBLAS implementation for AMD GPUs
+    - Mapping CPU optimizations to GPU equivalents (parallel MatMul, SIMD, mixed precision)
+    - Single and multi-GPU training workflows (data parallelism, model parallelism)
+    - Batch inference (throughput) vs low-latency inference (ANE)
+    - Flash Attention on GPU with Tensor Core acceleration
+    - Benchmarking methodology (nvidia-smi, rocm-smi, powermetrics, nsys)
+    - Hardware-specific optimization recommendations
 
 ### Fixed
 - Training loop batch data structuring
