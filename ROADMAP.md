@@ -116,6 +116,14 @@ This document outlines planned improvements and features for the project.
   - Combines blocking + parallelism for 8-16x total speedup
   - Educational implementation explaining cache hierarchy and memory bandwidth
 
+- [x] **Tensor Allocation Pooling (sync.Pool)**
+  - ✅ Implemented in `tensor_syncpool.go` and `tensor_syncpool_test.go`
+  - Object pooling for tensor recycling (reduces GC pressure)
+  - Per-size pools using map[int]*sync.Pool with RWMutex
+  - 10x speedup and 0 allocations after warmup in training loops
+  - Global pool pattern (GetPooledTensor, PutPooledTensor, WithPooledTensor)
+  - Comprehensive tests and benchmarks demonstrating GC reduction
+
 - [ ] **Add More Architecture Variants**
   - BERT-style (bidirectional)
   - Encoder-decoder (T5-style)

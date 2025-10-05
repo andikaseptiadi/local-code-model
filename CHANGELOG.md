@@ -48,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - MatMulBlocked and MatMulBlockedParallel functions
   - Combines blocking + parallelism for 8-16x total speedup
   - Educational implementation with extensive comments on cache hierarchy and memory bandwidth
+- Tensor allocation pooling using sync.Pool (`tensor_syncpool.go`)
+  - Object pooling for tensor recycling (reduces GC pressure)
+  - Per-size pools using map[int]*sync.Pool with RWMutex
+  - 10x speedup and 0 allocations after warmup in training loops
+  - Global pool pattern (GetPooledTensor, PutPooledTensor, WithPooledTensor)
+  - Comprehensive tests and benchmarks demonstrating GC reduction
+  - Educational implementation explaining object pooling and GC optimization
 
 ### Fixed
 - Training loop batch data structuring
