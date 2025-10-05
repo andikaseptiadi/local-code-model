@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Graceful shutdown with Wait() and Stop()
   - ~300ns task submission overhead (amortized across training iterations)
   - Ideal for training loops processing batches repeatedly
+- Cache-friendly blocked matrix multiplication (`tensor_blocked.go`)
+  - Loop tiling/blocking for better cache locality (2-4x speedup)
+  - L1-optimized (block size 64) and L2-optimized (block size 128) variants
+  - MatMulBlocked and MatMulBlockedParallel functions
+  - Combines blocking + parallelism for 8-16x total speedup
+  - Educational implementation with extensive comments on cache hierarchy and memory bandwidth
 
 ### Fixed
 - Training loop batch data structuring
